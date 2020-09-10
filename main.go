@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"log"
 	"net"
 )
@@ -35,7 +37,28 @@ func main() {
 		log.Fatal("can't read ", err)
 	}
 	typeMessage := string(response[0])
-	responseLen, _ := binary.Uvarint(response[1:5])
 
-	log.Printf("%s _ %d\n", typeMessage, responseLen)
+	log.Printf("%s _ %v _ %v\n", typeMessage, binary.BigEndian.Uint32(response[1:5]), binary.BigEndian.Uint32(response[5:9]))
+
+	md := md5.New()
+	md5Pass := password + username
+	_, err = md.Write([]byte(md5Pass))
+	md5Pass = hex.EncodeToString(md.Sum(nil)) + string(response[9:13])
+	_, err = md.Write([]byte(md5Pass))
+	hash := md.Sum(nil)
+	log.Printf("MD5 Hash %v", hash)
+
+	_, err = conn.Write([]byte("md5" + string(hash)))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = conn.Read(response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	typeMessage = string(response[0])
+
+	log.Printf("%s _ %s \n", typeMessage, response)
+
 }
