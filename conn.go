@@ -60,7 +60,7 @@ func (c *Conn) init() error {
 			connected = true
 		case message.AuthenticationMD5Password:
 			salt := string(authentication.Payload[:4]) // bad
-			md5Hashed := message.MD5(message.MD5(c.cfg["password"]+c.cfg["user"]) + salt)
+			md5Hashed := "md5" + message.MD5(message.MD5(c.cfg["password"]+c.cfg["user"])+salt)
 			c.reqBuf = message.MD5Msg(c.reqBuf, md5Hashed)
 		}
 	}

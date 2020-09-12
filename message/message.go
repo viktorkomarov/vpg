@@ -49,9 +49,8 @@ func StartUpMsg(cfg map[string]string, dst []byte) []byte {
 	}
 
 	binary.BigEndian.PutUint32(dst[4:8], protocolVersion)
-	binary.BigEndian.PutUint32(dst[0:4], uint32(len(dst)))
-
 	dst = append(dst, '\000')
+	binary.BigEndian.PutUint32(dst[0:4], uint32(len(dst)))
 
 	return dst
 }
