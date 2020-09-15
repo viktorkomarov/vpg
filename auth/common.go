@@ -54,16 +54,6 @@ func (a *AuthenticationResponse) Success() bool {
 	return a.Type == AuthenticationOK
 }
 
-func PasswordMsg(payload string) []byte {
-	dst := make([]byte, 5)
-	dst[0] = 'p'
-	binary.BigEndian.PutUint32(dst[1:5], uint32(len(payload)+5))
-	dst = append(dst, payload...)
-	dst = append(dst, '\000')
-
-	return dst
-}
-
 func md5Hash(password, user, salt string) string {
 	m := md5.New()
 	m.Write([]byte(password + user))
