@@ -1,3 +1,5 @@
+dev : clean all
+
 all : postgres 
 	./postgres
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 
 	"gitlab.com/VictorKomarov/vpg/message"
@@ -11,7 +12,10 @@ type Conn struct {
 	address string
 	cfg     map[string]string
 	conn    net.Conn
-	buf     []byte
+}
+
+type Authorizationer interface {
+	Authorize(conn net.Conn) error
 }
 
 func New(address string) (*Conn, error) {
@@ -66,7 +70,9 @@ func (c *Conn) init() error {
 			c.buf = message.PasswordMsg(c.buf, password)
 		case message.AuthenticationSASL:
 			saslMechanism := string(authentication.Payload) // postgresql support only SCRAM-SHA-256
-
+			c.buf = message.SASLMsg(c.buf, c.cfg["password"], saslMechanism)
+		default:
+			log.Fatalf("%s\n", c.buf)
 		}
 	}
 
