@@ -1,11 +1,18 @@
 package auth
 
 import (
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 )
+
+//mv where i use it
+type Authorizationer interface {
+	Authorize(conn net.Conn) error
+}
 
 type AuthenticationResponseType uint32
 
@@ -51,20 +58,35 @@ func PasswordMsg(payload string) []byte {
 	dst := make([]byte, 5)
 	dst[0] = 'p'
 	binary.BigEndian.PutUint32(dst[1:5], uint32(len(payload)+5))
-	dst = append(dst, password...)
+	dst = append(dst, payload...)
 	dst = append(dst, '\000')
 
 	return dst
 }
 
-func AuthClient(authentication AuthenticationResponse, user, password, string) Authorizationer {
+func md5Hash(password, user, salt string) string {
+	m := md5.New()
+	m.Write([]byte(password + user))
+	user = hex.EncodeToString(m.Sum(nil))
+	m.Reset()
+	m.Write([]byte(user + salt))
+
+	return "md5" + hex.EncodeToString(m.Sum(nil))
+}
+
+func AuthClient(authentication AuthenticationResponse, user, password string) Authorizationer {
 	switch authentication.Type {
 	case AuthenticationMD5Password:
-		return authMD5{
-			salt: string(authentication.Payload),
-			user: user,
-			password, password
+		return simpleAuth{
+			password: md5Hash(password, user, string(authentication.Payload)),
 		}
-	case 	
+	case AuthenticationCleartextPassword:
+		return simpleAuth{
+			password: password,
+		}
+	case AuthenticationSASL:
+		return newScramAuth(user, password, string(authentication.Payload))
 	}
+
+	return nil
 }
