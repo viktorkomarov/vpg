@@ -36,16 +36,18 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 	}
 	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
 	base64.RawStdEncoding.Encode(encoded, buf)
-	encodedInit := fmt.Sprintf("n,,n=,r=%s", encoded)
+	encodedInit := fmt.Sprintf("n=,r=%s", encoded)
 	length := 6 + len(encodedInit) + len(saslAuthenticationProtocol)
-	log.Printf("%s\n", encodedInit)
-	binary.BigEndian.PutUint32(result[1:5], uint32(length))
-	result = append(result, saslAuthenticationProtocol...)
-	result = append(result, '\000')
-	result = append(result, 0, 0, 0, 0)
-	binary.BigEndian.PutUint32(result[len(result)-4:], uint32(len(encodedInit)))
-	result = append(result, encodedInit...)
 
+	binary.BigEndian.PutUint32(result[1:5], uint32(length))
+	result = append(result, []byte(saslAuthenticationProtocol)...)
+	result = append(result, '\000')
+	s := len(result)
+	result = append(result, 0, 0, 0, 0)
+	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(encodedInit)))
+	result = append(result, encodedInit...)
+	result = append(result, '\000')
+	log.Printf("%s %d %s %d %s\n", string(result[0]), result[1:5], result[5:s], result[s:s+4], result[s+4:])
 	return result, nil
 }
 
