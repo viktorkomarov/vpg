@@ -15,14 +15,14 @@ const saslAuthenticationProtocol = "SCRAM-SHA-256"
 type scramAuth struct {
 	user       string
 	password   string
-	mechanisms []string
+	mechanisms string
 }
 
 func newScramAuth(user, password, serverMechanism string) *scramAuth {
 	return &scramAuth{
 		user:       user,
 		password:   password,
-		mechanisms: strings.Split(serverMechanism, ","),
+		mechanisms: serverMechanism,
 	}
 }
 
@@ -36,11 +36,12 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 	}
 	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
 	base64.RawStdEncoding.Encode(encoded, buf)
-	encodedInit := fmt.Sprintf("n=,r=%s", encoded)
-	length := 5 + len(encodedInit) + len(saslAuthenticationProtocol)
-
+	encodedInit := fmt.Sprintf("n,,n=,r=%s", encoded)
+	length := 6 + len(encodedInit) + len(saslAuthenticationProtocol)
+	log.Printf("%s\n", encodedInit)
 	binary.BigEndian.PutUint32(result[1:5], uint32(length))
 	result = append(result, saslAuthenticationProtocol...)
+	result = append(result, '\000')
 	result = append(result, 0, 0, 0, 0)
 	binary.BigEndian.PutUint32(result[len(result)-4:], uint32(len(encodedInit)))
 	result = append(result, encodedInit...)
@@ -73,11 +74,5 @@ func (a *scramAuth) Authorize(conn net.Conn) error {
 }
 
 func (a *scramAuth) containSupportMechanism() bool {
-	for _, mechanism := range a.mechanisms {
-		if mechanism == saslAuthenticationProtocol {
-			return true
-		}
-	}
-
-	return false
+	return strings.Contains(a.mechanisms, saslAuthenticationProtocol)
 }
