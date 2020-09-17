@@ -3,7 +3,9 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 )
@@ -16,27 +18,61 @@ type scramAuth struct {
 	mechanisms []string
 }
 
-func newScramAuth(user, password, serverMechanism string) scramAuth {
-	return scramAuth{
+func newScramAuth(user, password, serverMechanism string) *scramAuth {
+	return &scramAuth{
 		user:       user,
 		password:   password,
 		mechanisms: strings.Split(serverMechanism, ","),
 	}
 }
 
-func (a scramAuth) clientFirstMessage() ([]byte, error) {
-	buf := make([]byte, 18)
+//refactoring
+func (a *scramAuth) clientFirstMessage() ([]byte, error) {
+	result := []byte{'p', 0, 0, 0, 0}
 
+	buf := make([]byte, 18)
 	if _, err := rand.Read(buf); err != nil {
 		return nil, err
 	}
+	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
+	base64.RawStdEncoding.Encode(encoded, buf)
+	encodedInit := fmt.Sprintf("n=,r=%s", encoded)
+	length := 5 + len(encodedInit) + len(saslAuthenticationProtocol)
 
-	result := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
-	base64.RawStdEncoding.Encode(result, buf)
+	binary.BigEndian.PutUint32(result[1:5], uint32(length))
+	result = append(result, saslAuthenticationProtocol...)
+	result = append(result, 0, 0, 0, 0)
+	binary.BigEndian.PutUint32(result[len(result)-4:], uint32(len(encodedInit)))
+	result = append(result, encodedInit...)
+
 	return result, nil
 }
 
-func (a scramAuth) containSupportMechanism() bool {
+func (a *scramAuth) Authorize(conn net.Conn) error {
+	if !a.containSupportMechanism() { // mv to constructor
+		return fmt.Errorf("server doesn't support %s", saslAuthenticationProtocol)
+	}
+
+	initMsg, err := a.clientFirstMessage()
+	if err != nil {
+		return fmt.Errorf("can't create init msg %w", err)
+	}
+
+	if _, err := conn.Write(initMsg); err != nil {
+		return fmt.Errorf("can't send init msg %w", err)
+	}
+
+	buf := make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Fatalf("%s\n", buf)
+	return nil
+}
+
+func (a *scramAuth) containSupportMechanism() bool {
 	for _, mechanism := range a.mechanisms {
 		if mechanism == saslAuthenticationProtocol {
 			return true
@@ -44,12 +80,4 @@ func (a scramAuth) containSupportMechanism() bool {
 	}
 
 	return false
-}
-
-func (a scramAuth) Authorize(conn net.Conn) error {
-	if !a.containSupportMechanism() { // mv to constructor
-		return fmt.Errorf("server doesn't support %s", saslAuthenticationProtocol)
-	}
-
-	return nil
 }

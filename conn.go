@@ -12,6 +12,7 @@ type Conn struct {
 	address string
 	cfg     map[string]string
 	conn    net.Conn
+	buf     []byte
 }
 
 func New(address string) (*Conn, error) {
@@ -30,7 +31,7 @@ func New(address string) (*Conn, error) {
 		buf:  make([]byte, 0, 1024),
 	}
 
-	if err != c.init(); err != nil {
+	if err = c.init(); err != nil {
 		c.conn.Close()
 		return nil, err
 	}
@@ -57,10 +58,10 @@ func (c *Conn) init() error {
 		return fmt.Errorf("can't encode authentication msg %w", err)
 	}
 
-	if !authentication.Succes() {
+	if !authentication.Success() {
 		client := auth.AuthClient(authentication, c.cfg["user"], c.cfg["password"])
 		if err := client.Authorize(c.conn); err != nil {
-			return fmt.Errof("can't authorize connection %w", err)
+			return fmt.Errorf("can't authorize connection %w", err)
 		}
 	}
 
