@@ -34,20 +34,19 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 	if _, err := rand.Read(buf); err != nil {
 		return nil, err
 	}
+
 	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
 	base64.RawStdEncoding.Encode(encoded, buf)
-	encodedInit := fmt.Sprintf("n=,r=%s", encoded)
-	length := 6 + len(encodedInit) + len(saslAuthenticationProtocol)
+	encodedInit := fmt.Sprintf("n,,n=,r=%s", encoded)
+	length := 9 + len(encodedInit) + len(saslAuthenticationProtocol)
 
 	binary.BigEndian.PutUint32(result[1:5], uint32(length))
 	result = append(result, []byte(saslAuthenticationProtocol)...)
-	result = append(result, '\000')
 	s := len(result)
 	result = append(result, 0, 0, 0, 0)
 	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(encodedInit)))
 	result = append(result, encodedInit...)
-	result = append(result, '\000')
-	log.Printf("%s %d %s %d %s\n", string(result[0]), result[1:5], result[5:s], result[s:s+4], result[s+4:])
+	log.Printf("%s %d\n", result, binary.BigEndian.Uint32(result[s:s+4]))
 	return result, nil
 }
 
@@ -65,7 +64,7 @@ func (a *scramAuth) Authorize(conn net.Conn) error {
 		return fmt.Errorf("can't send init msg %w", err)
 	}
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
 	_, err = conn.Read(buf)
 	if err != nil {
 		log.Fatal(err)
@@ -76,5 +75,6 @@ func (a *scramAuth) Authorize(conn net.Conn) error {
 }
 
 func (a *scramAuth) containSupportMechanism() bool {
+	log.Printf("%s\n", a.mechanisms)
 	return strings.Contains(a.mechanisms, saslAuthenticationProtocol)
 }
