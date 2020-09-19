@@ -42,6 +42,7 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 
 	binary.BigEndian.PutUint32(result[1:5], uint32(length))
 	result = append(result, []byte(saslAuthenticationProtocol)...)
+	result = append(result, 0)
 	s := len(result)
 	result = append(result, 0, 0, 0, 0)
 	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(encodedInit)))
