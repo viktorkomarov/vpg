@@ -35,7 +35,7 @@ type AuthenticationResponse struct {
 	Payload []byte
 }
 
-func (a *AuthenticationResponse) Encode(buf []byte) error {
+func (a *AuthenticationResponse) Decode(buf []byte) error {
 	if len(buf) == 0 {
 		return errors.New("empty buf")
 	}

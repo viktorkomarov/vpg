@@ -33,8 +33,8 @@ func (a simpleAuth) Authorize(conn net.Conn) error {
 		return fmt.Errorf("can't authorize conn %w", err)
 	}
 
-	if err = authentication.Encode(resp); err != nil {
-		return fmt.Errorf("can't encode response msg %w", err)
+	if err = authentication.Decode(resp); err != nil {
+		return fmt.Errorf("can't decode response msg %w", err)
 	}
 
 	if !authentication.Success() {

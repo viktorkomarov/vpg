@@ -1,13 +1,17 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"net"
+	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
@@ -47,8 +51,23 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 	result = append(result, 0, 0, 0, 0)
 	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(encodedInit)))
 	result = append(result, encodedInit...)
-	log.Printf("%s %d\n", result, binary.BigEndian.Uint32(result[s:s+4]))
+
 	return result, nil
+}
+
+func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) ([]byte, error) {
+	result := []byte{'p', 0, 0, 0, 0}
+
+	result = append(result, ("c=biws,r=")...)
+	result = append(result, payload['r']...)
+
+	iter, err := strconv.Atoi(string(payload['i']))
+	if err != nil {
+		return nil, err
+	}
+
+	encryption := pbkdf2.Key([]byte(a.password), payload['s'], iter, 32, sha256.New)
+
 }
 
 func (a *scramAuth) Authorize(conn net.Conn) error {
@@ -68,14 +87,44 @@ func (a *scramAuth) Authorize(conn net.Conn) error {
 	buf := make([]byte, 4096)
 	_, err = conn.Read(buf)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("can't read from connection %w", err)
 	}
 
-	log.Fatalf("%s\n", buf)
+	var authentication AuthenticationResponse
+	if err = authentication.Decode(buf); err != nil {
+		return fmt.Errorf("can't decode authenctication %w", err)
+	}
+
+	serversResponse, err := validateServerResponse(authentication.Payload)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (a *scramAuth) containSupportMechanism() bool {
-	log.Printf("%s\n", a.mechanisms)
 	return strings.Contains(a.mechanisms, saslAuthenticationProtocol)
+}
+
+//add check that client-first-message contained
+func (a *scramAuth) validateServerResponse(response []byte) (map[rune][]byte, error) {
+	serversPayload := bytes.Split(response, []byte(","))
+	result := make(map[rune][]byte)
+
+	for _, payload := range serversPayload {
+		if len(payload) < 2 {
+			return nil, fmt.Errorf("can't define payload type %s", payload)
+		}
+
+		result[rune(payload[0])] = payload[2:]
+	}
+
+	for _, t := range []rune{'r', 's', 'i'} {
+		if result[t] == nil {
+			return nil, fmt.Errorf("server response doesn't contain %c", t)
+		}
+	}
+
+	return result, nil
 }

@@ -54,8 +54,8 @@ func (c *Conn) init() error {
 	}
 
 	var authentication auth.AuthenticationResponse
-	if err := authentication.Encode(resp); err != nil {
-		return fmt.Errorf("can't encode authentication msg %w", err)
+	if err := authentication.Decode(resp); err != nil {
+		return fmt.Errorf("can't decode authentication msg %w", err)
 	}
 
 	if !authentication.Success() {
