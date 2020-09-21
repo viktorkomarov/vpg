@@ -88,11 +88,7 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 }
 
 func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) []byte {
-	result := []byte{'p', 0, 0, 0, 0}
-
 	a.clientWithoutProof = []byte(fmt.Sprintf("c=biws,r=%s", string(payload['r'])))
-	result = append(result, fmt.Sprintf("%s", string(a.clientWithoutProof))...)
-
 	iter, _ := strconv.Atoi(string(payload['i']))
 	saltedPassword := pbkdf2.Key([]byte(a.password), payload['s'], iter, 32, sha256.New)
 	clientKey := a.HMAC(saltedPassword, []byte("Client Key"))
@@ -106,10 +102,11 @@ func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) []byte {
 		clientProof[i] = clientKey[i] ^ clientSignature[i]
 	}
 
-	result = append(result, []byte(fmt.Sprintf(",p=%s", string(clientProof)))...)
-	binary.BigEndian.PutUint32(result[1:5], 1024)
+	msg := fmt.Sprintf("%s,p=%s", a.clientWithoutProof, clientProof)
+	result := []byte{'p', 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(result[1:5], uint32(len(msg)+4))
+	result = append(result, fmt.Sprintf("%s", msg)...)
 
-	log.Printf("%s _ %d __ %s\n", string(result[0]), binary.BigEndian.Uint32(result[1:5]), result[5:])
 	return result
 }
 
