@@ -75,7 +75,7 @@ func AuthClient(authentication AuthenticationResponse, user, password string) Au
 			password: password,
 		}
 	case AuthenticationSASL:
-		return newScramAuth(user, password, string(authentication.Payload))
+		return newScramAuth(password, string(authentication.Payload))
 	}
 
 	return nil
