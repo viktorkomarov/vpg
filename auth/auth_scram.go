@@ -14,12 +14,13 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/text/secure/precis"
 )
 
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
 
 type scramAuth struct {
-	password   string
+	password   []byte
 	mechanisms string
 
 	clientFirst         []byte
@@ -29,8 +30,12 @@ type scramAuth struct {
 }
 
 func newScramAuth(password, serverMechanism string) *scramAuth {
+	data, err := precis.OpaqueString.Bytes([]byte(password))
+	if err != nil {
+		log.Fatal(err)
+	}
 	return &scramAuth{
-		password:   password,
+		password:   data,
 		mechanisms: serverMechanism,
 	}
 }
@@ -56,7 +61,6 @@ func (a *scramAuth) validateServerResponse(response []byte) (map[rune][]byte, er
 		}
 	}
 
-	result['i'] = result['i'][:4]
 	return result, nil
 }
 
@@ -88,13 +92,14 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 }
 
 func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) []byte {
-	a.clientWithoutProof = []byte(fmt.Sprintf("c=biws,r=%s", string(payload['r'])))
+	a.clientWithoutProof = []byte(fmt.Sprintf("c=biws,r=%s", payload['r']))
 	iter, _ := strconv.Atoi(string(payload['i']))
-	saltedPassword := pbkdf2.Key([]byte(a.password), payload['s'], iter, 32, sha256.New)
+
+	saltedPassword := pbkdf2.Key(a.password, payload['s'], iter, 32, sha256.New)
 	clientKey := a.HMAC(saltedPassword, []byte("Client Key"))
 	stroredKey := sha256.Sum256(clientKey)
 
-	authMessage := bytes.Join([][]byte{a.clientFinal, a.serverFirstResponse, a.clientWithoutProof}, []byte(","))
+	authMessage := bytes.Join([][]byte{a.clientFirst, a.serverFirstResponse, a.clientWithoutProof}, []byte(","))
 	clientSignature := a.HMAC(stroredKey[:], authMessage)
 
 	clientProof := make([]byte, len(clientSignature))
@@ -102,10 +107,14 @@ func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) []byte {
 		clientProof[i] = clientKey[i] ^ clientSignature[i]
 	}
 
-	msg := fmt.Sprintf("%s,p=%s", a.clientWithoutProof, clientProof)
+	buf := make([]byte, base64.StdEncoding.EncodedLen(len(clientProof)))
+	base64.StdEncoding.Encode(buf, clientProof)
+
+	msg := fmt.Sprintf("%s,p=%s", a.clientWithoutProof, buf)
 	result := []byte{'p', 0, 0, 0, 0}
 	binary.BigEndian.PutUint32(result[1:5], uint32(len(msg)+4))
-	result = append(result, fmt.Sprintf("%s", msg)...)
+
+	result = append(result, msg...)
 
 	return result
 }

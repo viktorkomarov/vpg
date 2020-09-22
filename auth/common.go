@@ -45,7 +45,8 @@ func (a *AuthenticationResponse) Decode(buf []byte) error {
 	}
 
 	a.Type = AuthenticationResponseType(binary.BigEndian.Uint32(buf[5:9]))
-	a.Payload = buf[9:]
+	size := binary.BigEndian.Uint32(buf[1:5])
+	a.Payload = buf[9 : 9+size-8]
 
 	return nil
 }
