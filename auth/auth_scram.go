@@ -7,37 +7,42 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/secure/precis"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
 
 type scramAuth struct {
-	password   []byte
-	mechanisms string
-
+	password            []byte
 	clientFirst         []byte
 	serverFirstResponse []byte
 	clientWithoutProof  []byte
 	clientFinal         []byte
 }
 
-func newScramAuth(password, serverMechanism string) *scramAuth {
-	data, err := precis.OpaqueString.Bytes([]byte(password))
+func newScramAuth(password, mechanisms string) (*scramAuth, error) {
+	a := &scramAuth{}
+
+	if !strings.Contains(mechanisms, saslAuthenticationProtocol) {
+		return nil, fmt.Errorf("server doesn't support %s", saslAuthenticationProtocol)
+	}
+
+	var err error
+	a.password, err = precis.OpaqueString.Bytes([]byte(password))
 	if err != nil {
-		log.Fatal(err)
+		return nil, errors.New("can't prepare password")
 	}
-	return &scramAuth{
-		password:   data,
-		mechanisms: serverMechanism,
-	}
+
+	return a, nil
 }
 
 //add check that client-first-message contained && delete about iter when size msg will standart
@@ -66,8 +71,6 @@ func (a *scramAuth) validateServerResponse(response []byte) (map[rune][]byte, er
 
 //refactoring
 func (a *scramAuth) clientFirstMessage() ([]byte, error) {
-	result := []byte{'p', 0, 0, 0, 0}
-
 	buf := make([]byte, 18)
 	if _, err := rand.Read(buf); err != nil {
 		return nil, err
@@ -75,18 +78,18 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 
 	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
 	base64.RawStdEncoding.Encode(encoded, buf)
-
 	a.clientFirst = []byte(fmt.Sprintf("n=,r=%s", encoded))
-	encodedInit := fmt.Sprintf("n,,n=,r=%s", encoded)
-	length := 9 + len(encodedInit) + len(saslAuthenticationProtocol)
+	payload := fmt.Sprintf("n,,n=,r=%s", encoded)
 
-	binary.BigEndian.PutUint32(result[1:5], uint32(length))
+	// new func
+	result := make([]byte, 5)
+	result[0] = 'p'
 	result = append(result, []byte(saslAuthenticationProtocol)...)
-	result = append(result, 0)
 	s := len(result)
 	result = append(result, 0, 0, 0, 0)
-	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(encodedInit)))
-	result = append(result, encodedInit...)
+	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(payload)))
+	result = append(result, payload...)
+	binary.BigEndian.PutUint32(result[1:5], uint32(len(result)))
 
 	return result, nil
 }
@@ -126,9 +129,6 @@ func (a *scramAuth) HMAC(key, msg []byte) []byte {
 }
 
 func (a *scramAuth) Authorize(conn net.Conn) error {
-	if !a.containSupportMechanism() { // mv to constructor
-		return fmt.Errorf("server doesn't support %s", saslAuthenticationProtocol)
-	}
 
 	initMsg, err := a.clientFirstMessage()
 	if err != nil {
@@ -169,8 +169,4 @@ func (a *scramAuth) Authorize(conn net.Conn) error {
 	}
 
 	return nil
-}
-
-func (a *scramAuth) containSupportMechanism() bool {
-	return strings.Contains(a.mechanisms, saslAuthenticationProtocol)
 }
