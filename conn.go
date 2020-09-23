@@ -1,10 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
-
-	"gitlab.com/VictorKomarov/vpg/postgres"
 )
 
 const (
@@ -12,11 +11,11 @@ const (
 )
 
 type Conn struct {
-	conn    net.Dial
 	address string
+	conn    net.Conn
 	cfg     map[string]string
-	writer  *postgres.Writer
-	reader  *postgres.Reader
+	writer  *Writer
+	reader  *Reader
 }
 
 func New(address string) (*Conn, error) {
@@ -32,8 +31,8 @@ func New(address string) (*Conn, error) {
 			"password": "password",
 			"database": "viktor",
 		},
-		reader: postgres.NewReader(conn),
-		writer: postgres.NewWriter(conn),
+		reader: NewReader(conn),
+		writer: NewWriter(conn),
 	}
 
 	if err = c.init(); err != nil {
@@ -45,7 +44,7 @@ func New(address string) (*Conn, error) {
 }
 
 type Authorizationer interface {
-	Authorize(conn *Conn) error
+	Authorize() error
 }
 
 func (c *Conn) init() error {
@@ -62,12 +61,12 @@ func (c *Conn) init() error {
 		return err
 	}
 
-	client := AuthClient(classificator, c.user, c.password)
-	if err := client.Authorize(c); err != nil {
+	client := AuthClient(classificator, c.cfg["user"], c.cfg["password"], c)
+	if err := client.Authorize(); err != nil {
 		return err
 	}
 
-	return nil
+	return c.isAuthorized()
 }
 
 func (c *Conn) receiveAuthClassificator() (ClassificatorAuth, error) {
@@ -81,4 +80,17 @@ func (c *Conn) receiveAuthClassificator() (ClassificatorAuth, error) {
 	}
 
 	return ClassificatorAuth{}, fmt.Errorf("unknown msg %+v", msg)
+}
+
+func (c *Conn) isAuthorized() error {
+	msg, err := c.receiveAuthClassificator()
+	if err != nil {
+		return err
+	}
+
+	if msg.Type != AuthenticationOK {
+		return errors.New("unathorized")
+	}
+
+	return nil
 }

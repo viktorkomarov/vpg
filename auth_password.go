@@ -4,8 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
-	"net"
 )
 
 func md5Hash(password, user, salt string) string {
@@ -19,41 +17,20 @@ func md5Hash(password, user, salt string) string {
 }
 
 type authPassword struct {
-	password []byte
+	password string
+	writer   *Writer
 }
 
-func (a *authPassword) IsMessage() {}
-
-func (a *authPassword) msg() []byte {
+func (a *authPassword) Encode() []byte {
 	dst := make([]byte, 5)
 	dst[0] = 'p'
-	binary.BigEndian.PutUint32(dst[1:5], uint32(len(a.Password)+5))
-	dst = append(dst, a.Password...)
+	binary.BigEndian.PutUint32(dst[1:5], uint32(len(a.password)+5))
+	dst = append(dst, a.password...)
 	dst = append(dst, '\000')
 
 	return dst
 }
 
-func (a *authPassword) Authorize(conn net.Conn) error {
-	_, err := conn.Write(a.msg())
-	if err != nil {
-		return fmt.Errorf("can't authorize conn %w", err)
-	}
-
-	var authentication ClassificatorAuth
-	resp := make([]byte, 1024)
-	_, err = conn.Read(resp)
-	if err != nil {
-		return fmt.Errorf("can't authorize conn %w", err)
-	}
-
-	if err = authentication.Decode(resp); err != nil {
-		return fmt.Errorf("can't decode response msg %w", err)
-	}
-
-	if !authentication.Success() {
-		return fmt.Errorf("can't authorize %s", authentication.Payload)
-	}
-
-	return nil
+func (a *authPassword) Authorize() error {
+	return a.writer.Send(a)
 }

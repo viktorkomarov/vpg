@@ -23,18 +23,20 @@ type ClassificatorAuth struct {
 
 func (c ClassificatorAuth) IsMessage() {}
 
-func AuthClient(authentication ClassificatorAuth, user, password string) Authorizationer {
+func AuthClient(authentication ClassificatorAuth, user, password string, conn *Conn) Authorizationer {
 	switch authentication.Type {
 	case AuthenticationMD5Password:
 		return &authPassword{
 			password: md5Hash(password, user, string(authentication.Payload)),
+			writer:   conn.writer,
 		}
 	case AuthenticationCleartextPassword:
-		return &simpleauthPasswordAuth{
+		return &authPassword{
 			password: password,
+			writer:   conn.writer,
 		}
 	case AuthenticationSASL:
-		return newScramAuth(password, string(authentication.Payload))
+		return nil
 	}
 
 	return nil

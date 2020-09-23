@@ -6,7 +6,7 @@ type StartUpMsg struct {
 	Payload map[string]string
 }
 
-func (s *StartUpMsg) Encode() []byte {
+func (s StartUpMsg) Encode() []byte {
 	dst := make([]byte, 9)
 
 	dst[0] = 'p'
