@@ -30,9 +30,11 @@ func AuthClient(authentication ClassificatorAuth, user, password string) Authori
 			password: md5Hash(password, user, string(authentication.Payload)),
 		}
 	case AuthenticationCleartextPassword:
-		return &authPassword{
+		return &simpleauthPasswordAuth{
 			password: password,
 		}
+	case AuthenticationSASL:
+		return newScramAuth(password, string(authentication.Payload))
 	}
 
 	return nil
