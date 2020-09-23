@@ -1,4 +1,4 @@
-package auth
+package main
 
 import (
 	"bytes"
@@ -29,6 +29,14 @@ type scramAuth struct {
 	clientFinal         []byte
 }
 
+type SASLContinue struct {
+	i int
+	r []byte
+	s []byte
+}
+
+func (s *SASLContinue) IsMessage() {}
+
 func newScramAuth(password, mechanisms string) (*scramAuth, error) {
 	a := &scramAuth{}
 
@@ -45,11 +53,9 @@ func newScramAuth(password, mechanisms string) (*scramAuth, error) {
 	return a, nil
 }
 
-//add check that client-first-message contained && delete about iter when size msg will standart
-func (a *scramAuth) validateServerResponse(response []byte) (map[rune][]byte, error) {
-	a.serverFirstResponse = response
-
-	serversPayload := bytes.Split(response, []byte(","))
+//add check that client-first-message contained
+func NewSASSLContinue(data []byte) (*SASLContinue, error) {
+	serversPayload := bytes.Split(data, []byte(","))
 	result := make(map[rune][]byte)
 
 	for _, payload := range serversPayload {
@@ -60,13 +66,21 @@ func (a *scramAuth) validateServerResponse(response []byte) (map[rune][]byte, er
 		result[rune(payload[0])] = payload[2:]
 	}
 
-	for _, t := range []rune{'r', 's', 'i'} {
-		if result[t] == nil {
-			return nil, fmt.Errorf("server response doesn't contain %c", t)
-		}
+	var err error
+	s := &SASLContinue{}
+	if s.i, err = strconv.Atoi(string(result['i'])); err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	if s.r = result['r']; s.r != nil {
+		return nil, errors.New("postgres doesn't send r")
+	}
+
+	if s.r = result['s']; s.s != nil {
+		return nil, errors.New("postgres doesn't send r")
+	}
+
+	return s, nil
 }
 
 //refactoring
@@ -96,8 +110,6 @@ func (a *scramAuth) clientFirstMessage() ([]byte, error) {
 
 func (a *scramAuth) clientFinalMessage(payload map[rune][]byte) []byte {
 	a.clientWithoutProof = []byte(fmt.Sprintf("c=biws,r=%s", payload['r']))
-	iter, _ := strconv.Atoi(string(payload['i']))
-
 	saltedPassword := pbkdf2.Key(a.password, payload['s'], iter, 32, sha256.New)
 	clientKey := a.HMAC(saltedPassword, []byte("Client Key"))
 	stroredKey := sha256.Sum256(clientKey)

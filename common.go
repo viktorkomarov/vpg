@@ -1,18 +1,4 @@
-package auth
-
-import (
-	"crypto/md5"
-	"encoding/binary"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"net"
-)
-
-//mv where i use it
-type Authorizationer interface {
-	Authorize(conn net.Conn) error
-}
+package main
 
 type AuthenticationResponseType uint32
 
@@ -30,49 +16,21 @@ const (
 	AuthenticationSASLFinal         AuthenticationResponseType = 12
 )
 
-type AuthenticationResponse struct {
+type ClassificatorAuth struct {
 	Type    AuthenticationResponseType
 	Payload []byte
 }
 
-func (a *AuthenticationResponse) Decode(buf []byte) error {
-	if len(buf) == 0 {
-		return errors.New("empty buf")
-	}
+func (c ClassificatorAuth) IsMessage() {}
 
-	if buf[0] != 'R' {
-		return fmt.Errorf("unsupported authencation type %s", buf)
-	}
-
-	a.Type = AuthenticationResponseType(binary.BigEndian.Uint32(buf[5:9]))
-	size := binary.BigEndian.Uint32(buf[1:5])
-	a.Payload = buf[9 : 9+size-8]
-
-	return nil
-}
-
-func (a *AuthenticationResponse) Success() bool {
-	return a.Type == AuthenticationOK
-}
-
-func md5Hash(password, user, salt string) string {
-	m := md5.New()
-	m.Write([]byte(password + user))
-	user = hex.EncodeToString(m.Sum(nil))
-	m.Reset()
-	m.Write([]byte(user + salt))
-
-	return "md5" + hex.EncodeToString(m.Sum(nil))
-}
-
-func AuthClient(authentication AuthenticationResponse, user, password string) Authorizationer {
+func AuthClient(authentication ClassificatorAuth, user, password string) Authorizationer {
 	switch authentication.Type {
 	case AuthenticationMD5Password:
-		return simpleAuth{
+		return &authPassword{
 			password: md5Hash(password, user, string(authentication.Payload)),
 		}
 	case AuthenticationCleartextPassword:
-		return simpleAuth{
+		return &simpleauthPasswordAuth{
 			password: password,
 		}
 	case AuthenticationSASL:
