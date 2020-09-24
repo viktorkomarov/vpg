@@ -11,9 +11,9 @@ const (
 	AuthenticationGSS               AuthenticationResponseType = 7
 	AuthenticationGSSContinue       AuthenticationResponseType = 8
 	AuthenticationSSPI              AuthenticationResponseType = 9
-	AuthenticationSASL              AuthenticationResponseType = 10
-	AuthenticationSASLContinue      AuthenticationResponseType = 11
-	AuthenticationSASLFinal         AuthenticationResponseType = 12
+	AuthenticationSASL              AuthenticationResponseType = 10 // done
+	AuthenticationSASLContinue      AuthenticationResponseType = 11 // done
+	AuthenticationSASLFinal         AuthenticationResponseType = 12 // done
 )
 
 type ClassificatorAuth struct {
@@ -36,7 +36,11 @@ func AuthClient(authentication ClassificatorAuth, user, password string, conn *C
 			writer:   conn.writer,
 		}
 	case AuthenticationSASL:
-		return nil
+		return &scramAuth{
+			password: []byte(password),
+			writer:   conn.writer,
+			reader:   conn.reader,
+		}
 	}
 
 	return nil
