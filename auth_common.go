@@ -23,7 +23,7 @@ type ClassificatorAuth struct {
 
 func (c ClassificatorAuth) IsMessage() {}
 
-func AuthClient(authentication ClassificatorAuth, user, password string, conn *Conn) Authorizationer {
+func AuthClient(authentication *ClassificatorAuth, user, password string, conn *Conn) Authorizationer {
 	switch authentication.Type {
 	case AuthenticationMD5Password:
 		return &authPassword{
@@ -37,9 +37,10 @@ func AuthClient(authentication ClassificatorAuth, user, password string, conn *C
 		}
 	case AuthenticationSASL:
 		return &scramAuth{
-			password: []byte(password),
-			writer:   conn.writer,
-			reader:   conn.reader,
+			password:   []byte(password),
+			writer:     conn.writer,
+			reader:     conn.reader,
+			mechanisms: string(authentication.Payload),
 		}
 	}
 

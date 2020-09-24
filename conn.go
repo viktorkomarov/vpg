@@ -69,17 +69,16 @@ func (c *Conn) init() error {
 	return c.isAuthorized()
 }
 
-func (c *Conn) receiveAuthClassificator() (ClassificatorAuth, error) {
+func (c *Conn) receiveAuthClassificator() (*ClassificatorAuth, error) {
 	msg, err := c.reader.Receive()
 	if err != nil {
-		return ClassificatorAuth{}, err
+		return &ClassificatorAuth{}, err
 	}
-
-	if c, ok := msg.(ClassificatorAuth); !ok {
+	if c, ok := msg.(*ClassificatorAuth); ok {
 		return c, nil
 	}
 
-	return ClassificatorAuth{}, fmt.Errorf("unknown msg %+v", msg)
+	return &ClassificatorAuth{}, fmt.Errorf("unknown msg %+v", msg)
 }
 
 func (c *Conn) isAuthorized() error {

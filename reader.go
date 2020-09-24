@@ -56,17 +56,17 @@ func (r *Reader) Receive() (Message, error) {
 }
 
 func receiveAuth(payload []byte) (Message, error) {
-	authType := AuthenticationResponseType(binary.BigEndian.Uint32(payload[:5]))
+	authType := AuthenticationResponseType(binary.BigEndian.Uint32(payload[:4]))
 
 	switch authType {
 	case AuthenticationOK, AuthenticationCleartextPassword:
 		return &ClassificatorAuth{Type: authType}, nil
 	case AuthenticationMD5Password, AuthenticationSASL:
-		return &ClassificatorAuth{Type: authType, Payload: payload[5:]}, nil
+		return &ClassificatorAuth{Type: authType, Payload: payload[4:]}, nil
 	case AuthenticationSASLContinue:
-		return NewSASSLContinue(payload[5:])
+		return NewSASSLContinue(payload[4:])
 	case AuthenticationSASLFinal:
-		return NewSASLFinal(payload[5:])
+		return NewSASLFinal(payload[4:])
 	default:
 		return nil, fmt.Errorf("unknown autherozied msg  %d %s", authType, payload[5:])
 	}
