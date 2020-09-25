@@ -14,101 +14,99 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/text/secure/precis"
 )
 
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
 
 type scramAuth struct {
-	password            []byte
-	clientFirst         []byte
-	serverFirstResponse *SASLContinue
-	clientWithoutProof  []byte
-	saltedPassword      []byte
-	clientProof         []byte
-	authMessage         []byte
-	generatedFirstMsg   []byte
+	reader *Reader
+	writer *Writer
 
-	writer     *Writer
-	reader     *Reader
-	mechanisms string
+	serverMechanisms string
+
+	password                       []byte
+	clientFirstMessageBare         []byte
+	clientFirstMessage             []byte
+	serverFirstMessage             *SASLContinue
+	clientFinalMessageWithoutProof []byte
+	saltedPassword                 []byte
+	authMessage                    []byte
 }
 
 func (a *scramAuth) Authorize() error {
-	err := a.prepare()
+	err := a.initAuth()
 	if err != nil {
 		return err
 	}
 
+	a.clientFirstMessage = []byte(fmt.Sprintf("n=,r=%s", a.clientFirstMessageBare))
 	clientFirst := ClientFirstMessage{
 		Protocol: []byte(saslAuthenticationProtocol),
-		Data:     []byte(fmt.Sprintf("n,,%s", a.clientFirst)),
+		Data:     []byte(fmt.Sprintf("n,,%s", a.clientFirstMessage)),
 	}
 
 	if err = a.writer.Send(clientFirst); err != nil {
 		return err
 	}
 
-	if err := a.receiveSASLContinue(); err != nil {
+	a.serverFirstMessage, err = a.receiveSASLContinue()
+	if err != nil {
 		return err
 	}
 
-	a.clientFinalMessage()
-	saslResp := SASLResponse{
-		Data: []byte(fmt.Sprintf("%s,p=%s", a.clientWithoutProof, a.clientProof)),
+	proof := a.clientFinalMessage()
+	clientFinal := SASLResponse{
+		Data: []byte(proof),
 	}
 
-	if err = a.writer.Send(saslResp); err != nil {
+	if err = a.writer.Send(clientFinal); err != nil {
 		return err
 	}
 
-	return a.validateSASLFinal()
+	msg, err := a.reader.Receive()
+	log.Fatalf("%+v \n %+v", msg, err)
+	return nil
 }
 
-func (a *scramAuth) prepare() error {
-	if !strings.Contains(a.mechanisms, saslAuthenticationProtocol) {
-		return fmt.Errorf("server doesn't support %s", saslAuthenticationProtocol)
-	}
-
-	var err error
-	a.password, err = precis.OpaqueString.Bytes(a.password)
-	if err != nil {
-		return errors.New("can't prepare password")
+func (a *scramAuth) initAuth() error {
+	if !strings.Contains(a.serverMechanisms, saslAuthenticationProtocol) {
+		return fmt.Errorf("not supported %s", saslAuthenticationProtocol)
 	}
 
 	buf := make([]byte, 18)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Errorf("can't generate random %w", err)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return err
 	}
-	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
-	base64.RawStdEncoding.Encode(encoded, buf)
-	a.generatedFirstMsg = encoded
-	a.clientFirst = []byte(fmt.Sprintf("n=,r=%s", encoded))
+
+	a.clientFirstMessageBare = make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
+	base64.RawStdEncoding.Encode(a.clientFirstMessageBare, buf)
 
 	return nil
 }
 
-func HMAC(key, msg []byte) []byte {
-	mac := hmac.New(sha256.New, key)
-	mac.Write(msg)
-	return mac.Sum(nil)
-}
-
-func (a *scramAuth) clientFinalMessage() {
-	a.clientWithoutProof = []byte(fmt.Sprintf("c=biws,r=%s", a.serverFirstResponse.r))
-	a.saltedPassword = pbkdf2.Key(a.password, a.serverFirstResponse.s, a.serverFirstResponse.i, 32, sha256.New)
-	clientKey := HMAC(a.saltedPassword, []byte("Client Key"))
-	stroredKey := sha256.Sum256(clientKey)
-	a.authMessage = bytes.Join([][]byte{a.clientFirst, a.serverFirstResponse.all, a.clientWithoutProof}, []byte(","))
-	clientSignature := HMAC(stroredKey[:], a.authMessage)
-
-	clientProof := make([]byte, len(clientSignature))
-	for i := range clientProof {
-		clientProof[i] = clientKey[i] ^ clientSignature[i]
+func (s *scramAuth) receiveSASLContinue() (*SASLContinue, error) {
+	msg, err := s.reader.Receive()
+	if err != nil {
+		return nil, err
 	}
 
-	a.clientProof = make([]byte, base64.StdEncoding.EncodedLen(len(clientProof)))
-	base64.StdEncoding.Encode(a.clientProof, clientProof)
+	if sasl, ok := msg.(*SASLContinue); ok {
+		return sasl, nil
+	}
+
+	return nil, errors.New("expected sasl continue")
+}
+
+func (a *scramAuth) clientFinalMessage() string {
+	clientFinalMessageWithoutProof := []byte(fmt.Sprintf("c=biws,r=%s", a.serverFirstMessage.r))
+
+	a.saltedPassword = pbkdf2.Key(a.password, a.serverFirstMessage.s, a.serverFirstMessage.i, 32, sha256.New)
+	a.authMessage = bytes.Join([][]byte{a.clientFirstMessage, a.serverFirstMessage.all, clientFinalMessageWithoutProof}, []byte(","))
+
+	clientProof := computeClientProof(a.saltedPassword, a.authMessage)
+
+	return fmt.Sprintf("%s,p=%s", clientFinalMessageWithoutProof, clientProof)
 }
 
 type ClientFirstMessage struct {
@@ -167,26 +165,12 @@ func NewSASSLContinue(data []byte) (*SASLContinue, error) {
 		return nil, errors.New("postgres doesn't send s")
 	}
 
-	return s, nil
-}
-
-func (s *scramAuth) receiveSASLContinue() error {
-	msg, err := s.reader.Receive()
+	s.s, err = base64.StdEncoding.DecodeString(string(s.s))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ser, ok := msg.(*SASLContinue)
-	if !ok {
-		return errors.New("cast error")
-	}
-
-	if !bytes.Contains(ser.r, s.generatedFirstMsg) {
-		return fmt.Errorf("uncorrect ser msg %s", ser.r)
-	}
-
-	s.serverFirstResponse = ser
-	return nil
+	return s, nil
 }
 
 type SASLResponse struct {
@@ -200,7 +184,6 @@ func (s SASLResponse) Encode() []byte {
 	binary.BigEndian.PutUint32(buf[1:5], uint32(len(s.Data)+4))
 	buf = append(buf, s.Data...)
 
-	log.Fatalf("%s", buf[5:])
 	return buf
 }
 
@@ -211,36 +194,31 @@ type SASLFinal struct {
 func (s SASLFinal) IsMessage() {}
 
 func NewSASLFinal(data []byte) (*SASLFinal, error) {
-	if !bytes.Contains(data, []byte("v=")) {
-		return nil, fmt.Errorf("uncorrect sasl final %s", data)
-	}
-
-	s := &SASLFinal{
-		data: data[2:],
-	}
-
-	return s, nil
+	log.Fatalf("%s", data)
+	return nil, nil
 }
 
 func (s *scramAuth) validateSASLFinal() error {
-	msg, err := s.reader.Receive()
-	if err != nil {
-		return err
-	}
-
-	final, ok := msg.(*SASLFinal)
-	if !ok {
-		return fmt.Errorf("expected sasl final %+v", msg)
-	}
-
-	serverKey := HMAC(s.saltedPassword, []byte("Server Key"))
-	serverSignature := HMAC(serverKey, s.authMessage)
-	buf := make([]byte, base64.StdEncoding.EncodedLen(len(serverSignature)))
-	base64.StdEncoding.Encode(buf, serverSignature)
-
-	if !hmac.Equal(final.data, buf) {
-		return fmt.Errorf("uncorrect server hash %s", final.data)
-	}
-
 	return nil
+}
+
+func computeHMAC(key, msg []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(msg)
+	return mac.Sum(nil)
+}
+
+func computeClientProof(saltedPassword, authMessage []byte) []byte {
+	clientKey := computeHMAC(saltedPassword, []byte("Client Key"))
+	storedKey := sha256.Sum256(clientKey)
+	clientSignature := computeHMAC(storedKey[:], authMessage)
+
+	clientProof := make([]byte, len(clientSignature))
+	for i := 0; i < len(clientSignature); i++ {
+		clientProof[i] = clientKey[i] ^ clientSignature[i]
+	}
+
+	buf := make([]byte, base64.StdEncoding.EncodedLen(len(clientProof)))
+	base64.StdEncoding.Encode(buf, clientProof)
+	return buf
 }

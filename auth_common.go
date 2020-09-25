@@ -37,10 +37,10 @@ func AuthClient(authentication *ClassificatorAuth, user, password string, conn *
 		}
 	case AuthenticationSASL:
 		return &scramAuth{
-			password:   []byte(password),
-			writer:     conn.writer,
-			reader:     conn.reader,
-			mechanisms: string(authentication.Payload),
+			password:         []byte(password),
+			writer:           conn.writer,
+			reader:           conn.reader,
+			serverMechanisms: string(authentication.Payload),
 		}
 	}
 
