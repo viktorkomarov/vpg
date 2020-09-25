@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -26,6 +27,7 @@ type scramAuth struct {
 	saltedPassword      []byte
 	clientProof         []byte
 	authMessage         []byte
+	generatedFirstMsg   []byte
 
 	writer     *Writer
 	reader     *Reader
@@ -80,7 +82,8 @@ func (a *scramAuth) prepare() error {
 	}
 	encoded := make([]byte, base64.RawStdEncoding.EncodedLen(len(buf)))
 	base64.RawStdEncoding.Encode(encoded, buf)
-	a.clientFirst = []byte(fmt.Sprintf("n,r=%s", encoded))
+	a.generatedFirstMsg = encoded
+	a.clientFirst = []byte(fmt.Sprintf("n=,r=%s", encoded))
 
 	return nil
 }
@@ -117,12 +120,12 @@ func (c ClientFirstMessage) Encode() []byte {
 	result := make([]byte, 5)
 	result[0] = 'p'
 	result = append(result, c.Protocol...)
-
+	result = append(result, '\000')
 	s := len(result)
 	result = append(result, 0, 0, 0, 0)
 	binary.BigEndian.PutUint32(result[s:s+4], uint32(len(c.Data)))
 	result = append(result, c.Data...)
-	binary.BigEndian.PutUint32(result[1:5], uint32(len(result)))
+	binary.BigEndian.PutUint32(result[1:5], uint32(len(result)-1))
 
 	return result
 }
@@ -142,27 +145,26 @@ func NewSASSLContinue(data []byte) (*SASLContinue, error) {
 	}
 
 	serversPayload := bytes.Split(data, []byte(","))
-	result := make(map[rune][]byte)
-
+	result := make(map[string][]byte)
 	for _, payload := range serversPayload {
 		if len(payload) < 2 {
 			return nil, fmt.Errorf("can't define payload type %s", payload)
 		}
 
-		result[rune(payload[0])] = payload[2:]
+		result[string(payload[0])] = payload[2:]
 	}
 
 	var err error
-	if s.i, err = strconv.Atoi(string(result['i'])); err != nil {
+	if s.i, err = strconv.Atoi(string(result["i"])); err != nil {
 		return nil, err
 	}
 
-	if s.r = result['r']; s.r != nil {
+	if s.r = result["r"]; s.r == nil {
 		return nil, errors.New("postgres doesn't send r")
 	}
 
-	if s.r = result['s']; s.s != nil {
-		return nil, errors.New("postgres doesn't send r")
+	if s.s = result["s"]; s.s == nil {
+		return nil, errors.New("postgres doesn't send s")
 	}
 
 	return s, nil
@@ -179,10 +181,11 @@ func (s *scramAuth) receiveSASLContinue() error {
 		return errors.New("cast error")
 	}
 
-	if !bytes.Contains(ser.r, s.clientFirst) {
+	if !bytes.Contains(ser.r, s.generatedFirstMsg) {
 		return fmt.Errorf("uncorrect ser msg %s", ser.r)
 	}
 
+	s.serverFirstResponse = ser
 	return nil
 }
 
@@ -197,6 +200,7 @@ func (s SASLResponse) Encode() []byte {
 	binary.BigEndian.PutUint32(buf[1:5], uint32(len(s.Data)+4))
 	buf = append(buf, s.Data...)
 
+	log.Fatalf("%s", buf[5:])
 	return buf
 }
 
