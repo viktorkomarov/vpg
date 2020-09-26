@@ -53,7 +53,7 @@ func (r *Reader) Receive() (Message, error) {
 	case 'T':
 		return NewRowDescription(payload)
 	default:
-		return nil, fmt.Errorf("unknown msg type %s %w", t, ErrBreakingProtocol)
+		return nil, fmt.Errorf("unknown msg type %s %w", string(t), ErrBreakingProtocol)
 	}
 }
 

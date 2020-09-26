@@ -13,6 +13,9 @@ func (s StartUpMsg) Encode() []byte {
 
 	binary.BigEndian.PutUint32(dst[4:], protocolVersion)
 	for key, val := range s.Payload {
+		if key == "password" {
+			continue
+		}
 		dst = append(dst, key...)
 		dst = append(dst, '\000')
 		dst = append(dst, val...)
