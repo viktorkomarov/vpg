@@ -47,9 +47,11 @@ func (r *Reader) Receive() (Message, error) {
 
 	switch rune(t) {
 	case 'E':
-		return nil, fmt.Errorf("%s", payload)
+		return nil, NewErrPostgresResponse(payload)
 	case 'R':
 		return receiveAuth(payload)
+	case 'T':
+		return NewRowDescription(payload)
 	default:
 		return nil, fmt.Errorf("unknown msg type %s %w", t, ErrBreakingProtocol)
 	}

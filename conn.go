@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 )
 
@@ -92,4 +94,32 @@ func (c *Conn) isAuthorized() error {
 	}
 
 	return nil
+}
+
+func (c *Conn) Query(query string) error {
+	q := &Query{
+		Text: query,
+	}
+
+	if err := c.writer.Send(q); err != nil {
+		return err
+	}
+	_, err := c.reader.Receive()
+	if err != nil {
+		log.Fatalf("%v\n", err)
+	}
+	return nil
+}
+
+type Query struct {
+	Text string
+}
+
+func (q *Query) Encode() []byte {
+	buf := []byte{'Q', 0, 0, 0, 0}
+
+	binary.BigEndian.PutUint32(buf[1:5], uint32(len(q.Text)+4))
+	buf = append(buf, q.Text...)
+
+	return buf
 }
