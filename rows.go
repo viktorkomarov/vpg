@@ -123,3 +123,13 @@ func NewRowDescription(data []byte) (*RowDescription, error) {
 	}
 	return rows, nil
 }
+
+type DataRows struct {
+	rows [][]byte
+}
+
+func (d *DataRows) IsMessage() {}
+
+func NewDataRow(payload []byte) (*DataRows, error) {
+	return nil, nil
+}
