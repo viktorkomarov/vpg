@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 )
 
 /*
@@ -83,12 +82,12 @@ type RowDescription struct {
 
 type Description struct {
 	Name         string
-	IDTable      int32
-	NumColumn    int16
-	IDDataType   int32
-	SizeDataType int16
-	ModDataType  int32
-	CodeFormat   int16
+	IDTable      uint32
+	NumColumn    uint16
+	IDDataType   uint32
+	SizeDataType uint16
+	ModDataType  uint32
+	CodeFormat   uint16
 }
 
 func (r *RowDescription) IsMessage() {}
@@ -97,7 +96,30 @@ func NewRowDescription(data []byte) (*RowDescription, error) {
 	rows := &RowDescription{}
 
 	rows.Count = int16(binary.BigEndian.Uint16(data[:2]))
+	rows.Descriptions = make([]Description, 0, rows.Count)
 	data = data[2:]
-	log.Fatalf("%v\n", data)
-	return nil, nil
+	for i := 0; int16(i) < rows.Count; i++ {
+		var desc Description
+		idx := bytes.Index(data, []byte{'\000'})
+		if idx == -1 {
+			return nil, fmt.Errorf("uncorrect rows description %+v", data)
+		}
+
+		desc.Name = string(data[:idx])
+		data = data[idx+1:] //TODO::errcheck
+		idx++
+		desc.IDTable = binary.BigEndian.Uint32(data[idx : idx+4])
+		idx += 4
+		desc.NumColumn = binary.BigEndian.Uint16(data[idx : idx+2])
+		idx += 2
+		desc.IDDataType = binary.BigEndian.Uint32(data[idx : idx+4])
+		idx += 4
+		desc.SizeDataType = binary.BigEndian.Uint16(data[idx : idx+2])
+		idx += 2
+		desc.ModDataType = binary.BigEndian.Uint32(data[idx : idx+4])
+		idx += 4
+		desc.CodeFormat = binary.BigEndian.Uint16(data[idx : idx+2])
+		data = data[idx:]
+	}
+	return rows, nil
 }
