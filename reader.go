@@ -52,6 +52,12 @@ func (r *Reader) Receive() (Message, error) {
 		return receiveAuth(payload)
 	case 'T':
 		return NewRowDescription(payload)
+	case 'S':
+		return NewParametrStatus(payload), nil
+	case 'K':
+		return NewBackendKeyData(payload)
+	case 'Z':
+		return NewReadyForQuery(payload), nil
 	default:
 		return nil, fmt.Errorf("unknown msg type %s %w", string(t), ErrBreakingProtocol)
 	}

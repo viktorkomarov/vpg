@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -18,6 +17,11 @@ type Conn struct {
 	cfg     map[string]string
 	writer  *Writer
 	reader  *Reader
+
+	parametersStatus map[string]string
+	pid              int32
+	key              int32
+	status           byte
 }
 
 func New(address string) (*Conn, error) {
@@ -33,8 +37,9 @@ func New(address string) (*Conn, error) {
 			"password": "password",
 			"database": "viktor",
 		},
-		reader: NewReader(conn),
-		writer: NewWriter(conn),
+		reader:           NewReader(conn),
+		writer:           NewWriter(conn),
+		parametersStatus: make(map[string]string),
 	}
 
 	if err = c.init(); err != nil {
@@ -68,7 +73,27 @@ func (c *Conn) init() error {
 		return err
 	}
 
-	return c.isAuthorized()
+	if err = c.isAuthorized(); err != nil {
+		return err
+	}
+
+	for { // enrich conn
+		msg, err := c.reader.Receive()
+		if err != nil {
+			return err
+		}
+
+		switch msg := msg.(type) {
+		case *ParameterStatus:
+			c.parametersStatus[msg.Name] = msg.Value
+		case *BackendKeyData:
+			c.pid = msg.PID
+			c.key = msg.Key
+		case *ReadyForQuery:
+			c.status = byte(*msg)
+			return nil
+		}
+	}
 }
 
 func (c *Conn) receiveAuthClassificator() (*ClassificatorAuth, error) {
@@ -104,22 +129,12 @@ func (c *Conn) Query(query string) error {
 	if err := c.writer.Send(q); err != nil {
 		return err
 	}
-	_, err := c.reader.Receive()
+
+	msg, err := c.reader.Receive()
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}
+	log.Fatalf("%+v", msg)
+
 	return nil
-}
-
-type Query struct {
-	Text string
-}
-
-func (q *Query) Encode() []byte {
-	buf := []byte{'Q', 0, 0, 0, 0}
-
-	binary.BigEndian.PutUint32(buf[1:5], uint32(len(q.Text)+4))
-	buf = append(buf, q.Text...)
-
-	return buf
 }

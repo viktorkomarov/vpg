@@ -98,6 +98,6 @@ func NewRowDescription(data []byte) (*RowDescription, error) {
 
 	rows.Count = int16(binary.BigEndian.Uint16(data[:2]))
 	data = data[2:]
-	log.Fatalf("%s\n", data)
+	log.Fatalf("%v\n", data)
 	return nil, nil
 }
