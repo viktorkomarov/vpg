@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 )
 
@@ -12,11 +11,10 @@ const (
 )
 
 type Conn struct {
-	address string
-	conn    net.Conn
-	cfg     map[string]string
-	writer  *Writer
-	reader  *Reader
+	cfg    map[string]string
+	conn   net.Conn
+	writer *Writer
+	reader *Reader
 
 	parametersStatus map[string]string
 	pid              int32
@@ -24,19 +22,19 @@ type Conn struct {
 	status           byte
 }
 
-func New(address string) (*Conn, error) {
-	conn, err := net.Dial("tcp", address)
+func New(cfg map[string]string) (*Conn, error) {
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	conn, err := net.Dial("tcp", cfg["address"]) // read about SetDeadline
 	if err != nil {
 		return nil, fmt.Errorf("can't init connection %w", err)
 	}
 
 	c := &Conn{
-		conn: conn,
-		cfg: map[string]string{
-			"user":     "viktor",
-			"password": "password",
-			"database": "viktor",
-		},
+		conn:             conn,
+		cfg:              cfg,
 		reader:           NewReader(conn),
 		writer:           NewWriter(conn),
 		parametersStatus: make(map[string]string),
@@ -121,20 +119,18 @@ func (c *Conn) isAuthorized() error {
 	return nil
 }
 
-func (c *Conn) Query(query string) error {
-	q := &Query{
-		Text: query,
-	}
+func (c *Conn) Close() error {
+	return nil
+}
 
-	if err := c.writer.Send(q); err != nil {
-		return err
-	}
+func validateConfig(cfg map[string]string) error {
+	requiredFields := []string{"address", "username", "password", "database"}
 
-	msg, err := c.reader.Receive()
-	if err != nil {
-		log.Fatalf("%v\n", err)
+	for _, field := range requiredFields {
+		if _, ok := cfg[field]; !ok {
+			return fmt.Errorf("required field %s is empty", field)
+		}
 	}
-	log.Fatalf("%+v", msg)
 
 	return nil
 }
