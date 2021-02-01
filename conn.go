@@ -8,7 +8,8 @@ import (
 )
 
 type Conn struct {
-	cfg    map[string]string
+	cfg map[string]string
+
 	conn   net.Conn
 	writer *Writer
 	reader *Reader
@@ -26,7 +27,7 @@ func New(cfg map[string]string) (*Conn, error) {
 
 	conn, err := net.DialTimeout("tcp", cfg["address"], time.Second*5)
 	if err != nil {
-		return nil, fmt.Errorf("can't init connection %w", err)
+		return nil, fmt.Errorf("can't open connection %w", err)
 	}
 
 	c := &Conn{
@@ -50,8 +51,7 @@ type Authorizationer interface {
 }
 
 func (c *Conn) init() error {
-	start := NewStartUpMessage(c.cfg)
-	if err := c.writer.Send(start); err != nil {
+	if err := c.writer.SendMsg(NewStartUpMessage(c.cfg)); err != nil {
 		return err
 	}
 
