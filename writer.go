@@ -14,10 +14,6 @@ func NewWriter(sender io.Writer) *Writer {
 	}
 }
 
-type Encoder interface {
-	Encode() []byte
-}
-
 func (w *Writer) Send(msg Encoder) error {
 	if _, err := w.sender.Write(msg.Encode()); err != nil {
 		return err

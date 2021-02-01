@@ -9,14 +9,12 @@ import (
 )
 
 type Reader struct {
-	reader  *bufio.Reader
-	sizeBuf []byte
+	reader *bufio.Reader
 }
 
 func NewReader(src io.Reader) *Reader {
 	return &Reader{
-		reader:  bufio.NewReader(src),
-		sizeBuf: make([]byte, 4),
+		reader: bufio.NewReader(src),
 	}
 }
 
@@ -29,23 +27,23 @@ var (
 )
 
 func (r *Reader) Receive() (Message, error) {
-	t, err := r.reader.ReadByte()
+	typeMessage, err := r.reader.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("can't read msg type %w", err)
 	}
 
-	if _, err = r.reader.Read(r.sizeBuf); err != nil {
+	sizeBuf := make([]byte, 4)
+	if _, err = r.reader.Read(sizeBuf); err != nil {
 		return nil, fmt.Errorf("can't read msg size %w", err)
 	}
 
-	size := binary.BigEndian.Uint32(r.sizeBuf)
-
+	size := binary.BigEndian.Uint32(sizeBuf)
 	payload := make([]byte, size-4)
 	if _, err := r.reader.Read(payload); err != nil {
 		return nil, fmt.Errorf("can't read msg payload %w", err)
 	}
 
-	switch rune(t) {
+	switch rune(typeMessage) {
 	case 'E':
 		return nil, NewErrPostgresResponse(payload)
 	case 'R':
@@ -59,7 +57,7 @@ func (r *Reader) Receive() (Message, error) {
 	case 'Z':
 		return NewReadyForQuery(payload), nil
 	default:
-		return nil, fmt.Errorf("unknown msg type %s %w", string(t), ErrBreakingProtocol)
+		return nil, fmt.Errorf("unknown msg type %s %w", string(typeMessage), ErrBreakingProtocol)
 	}
 }
 

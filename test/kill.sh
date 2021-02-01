@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker container stop postgres
+docker container kill postgres

@@ -1,28 +1,39 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 )
 
 type StartUpMsg struct {
-	Payload map[string]string
+	fields []byte
+}
+
+const (
+	protocolVersion = uint32(196608)
+)
+
+// no need to check because we validate config earler
+func NewStartUpMessage(cfg map[string]string) StartUpMsg {
+	fields := make([]byte, 0)
+	for _, field := range []string{"user", "database"} { // replication
+		fields = append(fields, field...)
+		fields = append(fields, '\000')
+		fields = append(fields, cfg[field]...)
+		fields = append(fields, '\000')
+	}
+	fields = append(fields, '\000')
+
+	return StartUpMsg{
+		fields: fields,
+	}
 }
 
 func (s StartUpMsg) Encode() []byte {
-	dst := make([]byte, 8)
+	var b bytes.Buffer
 
-	binary.BigEndian.PutUint32(dst[4:], protocolVersion)
-	for key, val := range s.Payload {
-		if key == "password" {
-			continue
-		}
-		dst = append(dst, key...)
-		dst = append(dst, '\000')
-		dst = append(dst, val...)
-		dst = append(dst, '\000')
-	}
-	dst = append(dst, '\000')
-	binary.BigEndian.PutUint32(dst[:4], uint32(len(dst)))
+	binary.Write(&b, binary.BigEndian, protocolVersion) // error
+	b.Write(s.fields)
 
-	return dst
+	return b.Bytes()
 }

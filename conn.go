@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
-)
-
-const (
-	protocolVersion = uint32(196608)
+	"time"
 )
 
 type Conn struct {
@@ -27,7 +24,7 @@ func New(cfg map[string]string) (*Conn, error) {
 		return nil, err
 	}
 
-	conn, err := net.Dial("tcp", cfg["address"]) // read about SetDeadline
+	conn, err := net.DialTimeout("tcp", cfg["address"], time.Second*5)
 	if err != nil {
 		return nil, fmt.Errorf("can't init connection %w", err)
 	}
@@ -53,10 +50,7 @@ type Authorizationer interface {
 }
 
 func (c *Conn) init() error {
-	start := StartUpMsg{
-		Payload: c.cfg,
-	}
-
+	start := NewStartUpMessage(c.cfg)
 	if err := c.writer.Send(start); err != nil {
 		return err
 	}
@@ -124,7 +118,7 @@ func (c *Conn) Close() error {
 }
 
 func validateConfig(cfg map[string]string) error {
-	requiredFields := []string{"address", "username", "password", "database"}
+	requiredFields := []string{"address", "user", "password", "database"}
 
 	for _, field := range requiredFields {
 		if _, ok := cfg[field]; !ok {
