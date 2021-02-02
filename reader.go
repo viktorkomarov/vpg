@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 )
 
 type Reader struct {
@@ -28,12 +27,11 @@ var (
 )
 
 func (r *Reader) receive() (message, error) {
-	log.Printf("try to read first byte")
 	typeMessage, err := r.reader.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("can't read msg type %w", err)
 	}
-	log.Printf("read first byte")
+
 	sizeBuf := make([]byte, 4)
 	if _, err = r.reader.Read(sizeBuf); err != nil {
 		return nil, fmt.Errorf("can't read msg size %w", err)

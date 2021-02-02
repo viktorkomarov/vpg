@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"log"
 )
 
 type Writer struct {
-	buffer *bytes.Buffer
-	writer io.Writer
+	buffer         *bytes.Buffer
+	setMessageType bool
+	writer         io.Writer
 }
 
 func newWriter(writer io.Writer) *Writer {
@@ -22,20 +24,26 @@ type encoder interface {
 	encode() []byte
 }
 
-func (w *Writer) payload(msg encoder) {
-	data := msg.encode()
-	size := len(data)
-	_ = binary.Write(w.buffer, binary.BigEndian, int32(size)+4) // can be error ?
-	w.buffer.Write(data)
-	w.buffer.WriteByte('\000')
-}
+func (w *Writer) mType(c byte) *Writer {
+	w.buffer.Reset()
+	w.buffer.WriteByte(c)
+	w.setMessageType = true
 
-func (w *Writer) send() error {
-	_, err := w.buffer.WriteTo(w.writer)
-	return err
+	return w
 }
 
 func (w *Writer) sendMsg(msg encoder) error {
-	w.payload(msg)
-	return w.send()
+	data := msg.encode()
+	size := len(data)
+	if w.setMessageType {
+		size++
+		w.setMessageType = false
+	}
+
+	binary.Write(w.buffer, binary.BigEndian, int32(size)+4)
+	w.buffer.Write(data)
+	w.buffer.WriteByte('\000')
+	log.Printf("%+v", w.buffer.Bytes())
+	_, err := w.buffer.WriteTo(w.writer)
+	return err
 }

@@ -55,12 +55,10 @@ func (c *Conn) init() error {
 		return err
 	}
 
-	log.Printf("send start up msg")
 	classificator, err := c.receiveAuthClassificator()
 	if err != nil {
 		return err
 	}
-	log.Printf("recieve %+v", classificator)
 
 	client := authClient(classificator, c.cfg["user"], c.cfg["password"])
 	if err = client.authorize(c.writer, c.reader); err != nil {

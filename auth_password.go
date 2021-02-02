@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"log"
 )
 
 func md5Hash(password, user, salt string) string {
+	log.Printf("%s\n", password)
 	m := md5.New()
 	m.Write([]byte(password + user))
 	user = hex.EncodeToString(m.Sum(nil))
@@ -23,14 +23,7 @@ type authPassword struct {
 }
 
 func (a authPassword) encode() []byte {
-	var b bytes.Buffer
-
-	b.WriteByte('p')
-	binary.Write(&b, binary.BigEndian, uint32(len(a.password)+5))
-	b.WriteString(a.password)
-	b.WriteByte('\000')
-
-	return b.Bytes()
+	return []byte(a.password)
 }
 
 type passwordClient struct {
@@ -38,7 +31,7 @@ type passwordClient struct {
 }
 
 func (c passwordClient) authorize(w *Writer, r *Reader) error {
-	err := w.sendMsg(c.pswd)
+	err := w.mType('p').sendMsg(c.pswd)
 	if err != nil {
 		return err
 	}
