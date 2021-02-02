@@ -10,7 +10,7 @@ type BackendKeyData struct {
 	Key int32
 }
 
-func (b *BackendKeyData) IsMessage() {}
+func (b *BackendKeyData) isMessage() {}
 
 func NewBackendKeyData(payload []byte) (*BackendKeyData, error) {
 	if len(payload) < 8 {

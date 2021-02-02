@@ -90,7 +90,7 @@ type Description struct {
 	CodeFormat   uint16
 }
 
-func (r *RowDescription) IsMessage() {}
+func (r *RowDescription) isMessage() {}
 
 func NewRowDescription(data []byte) (*RowDescription, error) {
 	rows := &RowDescription{}

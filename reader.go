@@ -6,32 +6,34 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 )
 
 type Reader struct {
 	reader *bufio.Reader
 }
 
-func NewReader(src io.Reader) *Reader {
+func newReader(src io.Reader) *Reader {
 	return &Reader{
 		reader: bufio.NewReader(src),
 	}
 }
 
-type Message interface {
-	IsMessage()
+type message interface {
+	isMessage()
 }
 
 var (
 	ErrBreakingProtocol = errors.New("unknown postgres protocol action")
 )
 
-func (r *Reader) Receive() (Message, error) {
+func (r *Reader) receive() (message, error) {
+	log.Printf("try to read first byte")
 	typeMessage, err := r.reader.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("can't read msg type %w", err)
 	}
-
+	log.Printf("read first byte")
 	sizeBuf := make([]byte, 4)
 	if _, err = r.reader.Read(sizeBuf); err != nil {
 		return nil, fmt.Errorf("can't read msg size %w", err)
@@ -61,18 +63,18 @@ func (r *Reader) Receive() (Message, error) {
 	}
 }
 
-func receiveAuth(payload []byte) (Message, error) {
-	authType := AuthenticationResponseType(binary.BigEndian.Uint32(payload[:4]))
+func receiveAuth(payload []byte) (message, error) {
+	authType := authenticationResponseType(binary.BigEndian.Uint32(payload[:4]))
 
 	switch authType {
-	case AuthenticationOK, AuthenticationCleartextPassword:
-		return &ClassificatorAuth{Type: authType}, nil
-	case AuthenticationMD5Password, AuthenticationSASL:
-		return &ClassificatorAuth{Type: authType, Payload: payload[4:]}, nil
-	case AuthenticationSASLContinue:
-		return NewSASSLContinue(payload[4:])
-	case AuthenticationSASLFinal:
-		return NewSASLFinal(payload[4:])
+	case authenticationOK, authenticationCleartextPassword:
+		return auth{Type: authType}, nil
+	case authenticationMD5Password, authenticationSASL:
+		return auth{Type: authType, Payload: payload[4:]}, nil
+	//case authenticationSASLContinue:
+	//return NewSASSLContinue(payload[4:])
+	//case authenticationSASLFinal:
+	//return NewSASLFinal(payload[4:])
 	default:
 		return nil, fmt.Errorf("unknown autherozied msg  %d %s", authType, payload[5:])
 	}

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 )
 
 func md5Hash(password, user, salt string) string {
@@ -18,19 +20,42 @@ func md5Hash(password, user, salt string) string {
 
 type authPassword struct {
 	password string
-	writer   *Writer
 }
 
-func (a *authPassword) Encode() []byte {
-	dst := make([]byte, 5)
-	dst[0] = 'p'
-	binary.BigEndian.PutUint32(dst[1:5], uint32(len(a.password)+5))
-	dst = append(dst, a.password...)
-	dst = append(dst, '\000')
+func (a authPassword) encode() []byte {
+	var b bytes.Buffer
 
-	return dst
+	b.WriteByte('p')
+	binary.Write(&b, binary.BigEndian, uint32(len(a.password)+5))
+	b.WriteString(a.password)
+	b.WriteByte('\000')
+
+	return b.Bytes()
 }
 
-func (a *authPassword) Authorize() error {
-	return a.writer.Send(a)
+type passwordClient struct {
+	pswd authPassword
+}
+
+func (c passwordClient) authorize(w *Writer, r *Reader) error {
+	err := w.sendMsg(c.pswd)
+	if err != nil {
+		return err
+	}
+
+	msg, err := r.receive()
+	if err != nil {
+		return err
+	}
+
+	authOk, ok := msg.(auth)
+	if !ok {
+		return errors.New("unexpected msg")
+	}
+
+	if authOk.Type != authenticationOK {
+		return errors.New("unathorized")
+	}
+
+	return nil
 }

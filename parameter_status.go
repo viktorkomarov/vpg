@@ -9,7 +9,7 @@ type ParameterStatus struct {
 	Value string
 }
 
-func (p *ParameterStatus) IsMessage() {}
+func (p *ParameterStatus) isMessage() {}
 
 func NewParametrStatus(payload []byte) *ParameterStatus {
 	params := bytes.Split(payload, []byte(" "))

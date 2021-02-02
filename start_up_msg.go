@@ -5,16 +5,15 @@ import (
 	"encoding/binary"
 )
 
-type StartUpMsg struct {
+type startUpMsg struct {
 	fields []byte
 }
 
 const (
-	protocolVersion = uint32(196608)
+	protocolVersion = int32(196608)
 )
 
-// no need to check because we validate config earler
-func NewStartUpMessage(cfg map[string]string) StartUpMsg {
+func newStartUpMessage(cfg map[string]string) startUpMsg {
 	fields := make([]byte, 0)
 	for _, field := range []string{"user", "database"} { // replication
 		fields = append(fields, field...)
@@ -24,12 +23,12 @@ func NewStartUpMessage(cfg map[string]string) StartUpMsg {
 	}
 	fields = append(fields, '\000')
 
-	return StartUpMsg{
+	return startUpMsg{
 		fields: fields,
 	}
 }
 
-func (s StartUpMsg) Encode() []byte {
+func (s startUpMsg) encode() []byte {
 	var b bytes.Buffer
 
 	binary.Write(&b, binary.BigEndian, protocolVersion) // error

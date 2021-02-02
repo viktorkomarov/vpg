@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"net"
 	"time"
 )
@@ -33,8 +33,8 @@ func New(cfg map[string]string) (*Conn, error) {
 	c := &Conn{
 		conn:             conn,
 		cfg:              cfg,
-		reader:           NewReader(conn),
-		writer:           NewWriter(conn),
+		reader:           newReader(conn),
+		writer:           newWriter(conn),
 		parametersStatus: make(map[string]string),
 	}
 
@@ -46,31 +46,30 @@ func New(cfg map[string]string) (*Conn, error) {
 	return c, nil
 }
 
-type Authorizationer interface {
-	Authorize() error
+type authorizationer interface {
+	authorize(writer *Writer, reader *Reader) error
 }
 
 func (c *Conn) init() error {
-	if err := c.writer.SendMsg(NewStartUpMessage(c.cfg)); err != nil {
+	if err := c.writer.sendMsg(newStartUpMessage(c.cfg)); err != nil {
 		return err
 	}
 
+	log.Printf("send start up msg")
 	classificator, err := c.receiveAuthClassificator()
 	if err != nil {
 		return err
 	}
+	log.Printf("recieve %+v", classificator)
 
-	client := AuthClient(classificator, c.cfg["user"], c.cfg["password"], c)
-	if err := client.Authorize(); err != nil {
+	client := authClient(classificator, c.cfg["user"], c.cfg["password"])
+	if err = client.authorize(c.writer, c.reader); err != nil {
 		return err
 	}
 
-	if err = c.isAuthorized(); err != nil {
-		return err
-	}
-
+	log.Fatal("AUTHORIZED")
 	for { // enrich conn
-		msg, err := c.reader.Receive()
+		msg, err := c.reader.receive()
 		if err != nil {
 			return err
 		}
@@ -83,34 +82,23 @@ func (c *Conn) init() error {
 			c.key = msg.Key
 		case *ReadyForQuery:
 			c.status = byte(*msg)
-			return nil
+		default:
+			//
 		}
 	}
 }
 
-func (c *Conn) receiveAuthClassificator() (*ClassificatorAuth, error) {
-	msg, err := c.reader.Receive()
+func (c *Conn) receiveAuthClassificator() (auth, error) {
+	msg, err := c.reader.receive()
 	if err != nil {
-		return &ClassificatorAuth{}, err
+		return auth{}, err
 	}
-	if c, ok := msg.(*ClassificatorAuth); ok {
+
+	if c, ok := msg.(auth); ok {
 		return c, nil
 	}
 
-	return &ClassificatorAuth{}, fmt.Errorf("unknown msg %+v", msg)
-}
-
-func (c *Conn) isAuthorized() error {
-	msg, err := c.receiveAuthClassificator()
-	if err != nil {
-		return err
-	}
-
-	if msg.Type != AuthenticationOK {
-		return errors.New("unathorized")
-	}
-
-	return nil
+	return auth{}, fmt.Errorf("unknown msg %+v", msg)
 }
 
 func (c *Conn) Close() error {

@@ -1,24 +1,8 @@
 package main
 
-import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
-	"errors"
-	"fmt"
-	"log"
-	"strconv"
-	"strings"
-
-	"golang.org/x/crypto/pbkdf2"
-)
-
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
 
-type scramAuth struct {
+/*type scramAuth struct {
 	reader *Reader
 	writer *Writer
 
@@ -33,7 +17,7 @@ type scramAuth struct {
 	authMessage                    []byte
 }
 
-func (a *scramAuth) Authorize() error {
+func (a *scramAuth) authorize() error {
 	err := a.initAuth()
 	if err != nil {
 		return err
@@ -45,7 +29,7 @@ func (a *scramAuth) Authorize() error {
 		Data:     []byte(fmt.Sprintf("n,,%s", a.clientFirstMessage)),
 	}
 
-	if err = a.writer.Send(clientFirst); err != nil {
+	if err = a.writer.send(clientFirst); err != nil {
 		return err
 	}
 
@@ -135,7 +119,7 @@ type SASLContinue struct {
 	all []byte
 }
 
-func (s *SASLContinue) IsMessage() {}
+func (s *SASLContinue) isMessage() {}
 
 func NewSASSLContinue(data []byte) (*SASLContinue, error) {
 	s := &SASLContinue{
@@ -191,11 +175,10 @@ type SASLFinal struct {
 	data []byte
 }
 
-func (s SASLFinal) IsMessage() {}
+func (s SASLFinal) isMessage() {}
 
-func NewSASLFinal(data []byte) (*SASLFinal, error) {
-	log.Fatalf("%s", data)
-	return nil, nil
+func NewSASLFinal(data []byte) (SASLFinal, error) {
+	return SASLFinal{}, nil
 }
 
 func (s *scramAuth) validateSASLFinal() error {
@@ -221,4 +204,4 @@ func computeClientProof(saltedPassword, authMessage []byte) []byte {
 	buf := make([]byte, base64.StdEncoding.EncodedLen(len(clientProof)))
 	base64.StdEncoding.Encode(buf, clientProof)
 	return buf
-}
+}*/

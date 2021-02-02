@@ -1,47 +1,43 @@
 package main
 
-type AuthenticationResponseType uint32
+type authenticationResponseType uint32
 
 const (
-	AuthenticationOK                AuthenticationResponseType = 0 // done
-	AuthenticationKerberosV5        AuthenticationResponseType = 2 // #not_supported : https://postgrespro.ru/docs/postgrespro/10/protocol-flow
-	AuthenticationCleartextPassword AuthenticationResponseType = 3 // done
-	AuthenticationMD5Password       AuthenticationResponseType = 5 // done
-	AuthenticationSCMCredential     AuthenticationResponseType = 6 // unix local only
-	AuthenticationGSS               AuthenticationResponseType = 7
-	AuthenticationGSSContinue       AuthenticationResponseType = 8
-	AuthenticationSSPI              AuthenticationResponseType = 9
-	AuthenticationSASL              AuthenticationResponseType = 10 // done
-	AuthenticationSASLContinue      AuthenticationResponseType = 11 // done
-	AuthenticationSASLFinal         AuthenticationResponseType = 12 // done
+	authenticationOK                authenticationResponseType = 0 // done
+	authenticationKerberosV5        authenticationResponseType = 2 // #not_supported : https://postgrespro.ru/docs/postgrespro/10/protocol-flow
+	authenticationCleartextPassword authenticationResponseType = 3 // done
+	authenticationMD5Password       authenticationResponseType = 5 // done
+	authenticationSCMCredential     authenticationResponseType = 6 // unix local only
+	authenticationGSS               authenticationResponseType = 7
+	authenticationGSSContinue       authenticationResponseType = 8
+	authenticationSSPI              authenticationResponseType = 9
+	authenticationSASL              authenticationResponseType = 10 // done
+	authenticationSASLContinue      authenticationResponseType = 11 // done
+	authenticationSASLFinal         authenticationResponseType = 12 // done
 )
 
-type ClassificatorAuth struct {
-	Type    AuthenticationResponseType
+type auth struct {
+	Type    authenticationResponseType
 	Payload []byte
 }
 
-func (c ClassificatorAuth) IsMessage() {}
+func (a auth) isMessage() {}
 
-func AuthClient(authentication *ClassificatorAuth, user, password string, conn *Conn) Authorizationer {
-	switch authentication.Type {
-	case AuthenticationMD5Password:
-		return &authPassword{
-			password: md5Hash(password, user, string(authentication.Payload)),
-			writer:   conn.writer,
+func authClient(msg auth, user, password string) authorizationer {
+	switch msg.Type {
+	case authenticationMD5Password:
+		return passwordClient{
+			pswd: authPassword{md5Hash(password, user, string(msg.Payload))},
 		}
-	case AuthenticationCleartextPassword:
-		return &authPassword{
-			password: password,
-			writer:   conn.writer,
+	case authenticationCleartextPassword:
+		return passwordClient{
+			pswd: authPassword{password},
 		}
-	case AuthenticationSASL:
-		return &scramAuth{
+		/*case authenticationSASL:
+		return scramAuth{
 			password:         []byte(password),
-			writer:           conn.writer,
-			reader:           conn.reader,
-			serverMechanisms: string(authentication.Payload),
-		}
+			serverMechanisms: string(msg.Payload),
+		}*/
 	}
 
 	return nil

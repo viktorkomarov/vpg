@@ -4,7 +4,7 @@ import "encoding/binary"
 
 type ReadyForQuery byte
 
-func (r *ReadyForQuery) IsMessage() {}
+func (r *ReadyForQuery) isMessage() {}
 
 func NewReadyForQuery(payload []byte) *ReadyForQuery {
 	t := ReadyForQuery(payload[0])
