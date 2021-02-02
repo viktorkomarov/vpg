@@ -27,7 +27,7 @@ type encoder interface {
 func (w *Writer) payload(msg encoder) {
 	data := msg.encode()
 	size := len(data)
-	_ = binary.Write(w.buffer, binary.BigEndian, int32(size)) // can be error ?
+	_ = binary.Write(w.buffer, binary.BigEndian, int32(size)+4) // can be error ?
 	w.buffer.Write(data)
 	w.buffer.WriteByte('\000')
 }
