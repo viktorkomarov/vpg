@@ -1,22 +1,20 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"io"
-	"log"
 )
 
 type Writer struct {
 	buffer *bytes.Buffer
-	writer *bufio.Writer
+	writer io.Writer
 }
 
 func newWriter(writer io.Writer) *Writer {
 	return &Writer{
 		buffer: bytes.NewBuffer(make([]byte, 0, 1024)),
-		writer: bufio.NewWriter(writer),
+		writer: writer,
 	}
 }
 
@@ -33,8 +31,6 @@ func (w *Writer) payload(msg encoder) {
 }
 
 func (w *Writer) send() error {
-	data := w.buffer.Bytes()
-	log.Printf("%+v", data)
 	_, err := w.buffer.WriteTo(w.writer)
 	return err
 }
