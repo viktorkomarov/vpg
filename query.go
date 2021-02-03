@@ -1,14 +1,20 @@
 package main
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
-type ReadyForQuery byte
+type readyForQuery byte
 
-func (r *ReadyForQuery) isMessage() {}
+func (r readyForQuery) isMessage() {}
 
-func NewReadyForQuery(payload []byte) *ReadyForQuery {
-	t := ReadyForQuery(payload[0])
-	return &t
+func newReadyForQuery(payload []byte) (readyForQuery, error) {
+	if len(payload) < 0 {
+		return readyForQuery('e'), fmt.Errorf("incorrect ready for queue %+v", payload)
+	}
+
+	return readyForQuery(payload[0]), nil
 }
 
 type Query struct {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
 )
@@ -17,7 +16,7 @@ type Conn struct {
 	parametersStatus map[string]string
 	pid              int32
 	key              int32
-	status           byte
+	status           byte // may be more cleve
 }
 
 func New(cfg map[string]string) (*Conn, error) {
@@ -46,60 +45,75 @@ func New(cfg map[string]string) (*Conn, error) {
 	return c, nil
 }
 
-type authorizationer interface {
-	authorize(writer *Writer, reader *Reader) error
-}
-
 func (c *Conn) init() error {
 	if err := c.writer.sendMsg(newStartUpMessage(c.cfg)); err != nil {
 		return err
 	}
 
-	classificator, err := c.receiveAuthClassificator()
+	err := c.authorize()
 	if err != nil {
 		return err
 	}
 
-	client := authClient(classificator, c.cfg["user"], c.cfg["password"])
-	if err = client.authorize(c.writer, c.reader); err != nil {
-		return err
-	}
-
-	log.Fatal("AUTHORIZED")
-	for { // enrich conn
-		msg, err := c.reader.receive()
+	for {
+		msg, err := c.receive()
 		if err != nil {
 			return err
 		}
 
 		switch msg := msg.(type) {
-		case *ParameterStatus:
-			c.parametersStatus[msg.Name] = msg.Value
-		case *BackendKeyData:
+		case backendKeyData:
 			c.pid = msg.PID
 			c.key = msg.Key
-		case *ReadyForQuery:
-			c.status = byte(*msg)
+		case readyForQuery:
+			c.status = byte(msg)
+			return nil
 		default:
-			//
+			return fmt.Errorf("unexpected msg %+v", msg)
 		}
 	}
 }
 
-func (c *Conn) receiveAuthClassificator() (auth, error) {
-	msg, err := c.reader.receive()
-	if err != nil {
-		return auth{}, err
-	}
-
-	if c, ok := msg.(auth); ok {
-		return c, nil
-	}
-
-	return auth{}, fmt.Errorf("unknown msg %+v", msg)
+func (c *Conn) Close() error {
+	return nil
 }
 
-func (c *Conn) Close() error {
+func (c *Conn) receive() (message, error) {
+	for {
+		msg, err := c.reader.receive()
+		if err != nil {
+			return nil, err
+		}
+
+		if status, ok := msg.(parameterStatus); ok {
+			c.parametersStatus[status.Name] = status.Value
+			continue
+		}
+
+		return msg, nil
+	}
+}
+
+type authorizationer interface {
+	authorize(writer *Writer, reader *Reader) error
+}
+
+func (c *Conn) authorize() error {
+	msg, err := c.receive()
+	if err != nil {
+		return err
+	}
+
+	authType, ok := msg.(auth)
+	if !ok {
+		return fmt.Errorf("unexpected msg %+v", msg)
+	}
+
+	client := authClient(authType, c.cfg["user"], c.cfg["password"])
+	if err = client.authorize(c.writer, c.reader); err != nil {
+		return err
+	}
+
 	return nil
 }
 

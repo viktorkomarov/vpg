@@ -5,19 +5,19 @@ import (
 	"fmt"
 )
 
-type BackendKeyData struct {
+type backendKeyData struct {
 	PID int32
 	Key int32
 }
 
-func (b *BackendKeyData) isMessage() {}
+func (b backendKeyData) isMessage() {}
 
-func NewBackendKeyData(payload []byte) (*BackendKeyData, error) {
+func NewBackendKeyData(payload []byte) (backendKeyData, error) {
 	if len(payload) < 8 {
-		return nil, fmt.Errorf("uncorrect backend_key_data len %v", payload)
+		return backendKeyData{}, fmt.Errorf("incorrect backend_key_data len %v", payload)
 	}
 
-	return &BackendKeyData{
+	return backendKeyData{
 		PID: int32(binary.BigEndian.Uint32(payload[:4])),
 		Key: int32(binary.BigEndian.Uint32(payload[4:])),
 	}, nil

@@ -27,7 +27,7 @@ var (
 )
 
 func (r *Reader) receive() (message, error) {
-	typeMessage, err := r.reader.ReadByte()
+	typeMessage, err := r.reader.ReadByte() // maybe use ioutil
 	if err != nil {
 		return nil, fmt.Errorf("can't read msg type %w", err)
 	}
@@ -51,11 +51,11 @@ func (r *Reader) receive() (message, error) {
 	case 'T':
 		return NewRowDescription(payload)
 	case 'S':
-		return NewParametrStatus(payload), nil
+		return newParametrStatus(payload), nil
 	case 'K':
 		return NewBackendKeyData(payload)
 	case 'Z':
-		return NewReadyForQuery(payload), nil
+		return newReadyForQuery(payload)
 	default:
 		return nil, fmt.Errorf("unknown msg type %s %w", string(typeMessage), ErrBreakingProtocol)
 	}

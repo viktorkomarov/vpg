@@ -4,24 +4,23 @@ import (
 	"bytes"
 )
 
-type ParameterStatus struct {
+type parameterStatus struct {
 	Name  string
 	Value string
 }
 
-func (p *ParameterStatus) isMessage() {}
+func (p parameterStatus) isMessage() {}
 
-func NewParametrStatus(payload []byte) *ParameterStatus {
+func newParametrStatus(payload []byte) parameterStatus {
 	params := bytes.Split(payload, []byte(" "))
-	if len(params) < 2 { // doesn't matter
-		return &ParameterStatus{
-			Name:  string(params[0]),
-			Value: "",
-		}
+
+	var value string
+	if len(params) > 1 {
+		value = string(params[1])
 	}
 
-	return &ParameterStatus{
+	return parameterStatus{
 		Name:  string(params[0]),
-		Value: string(params[1]),
+		Value: value,
 	}
 }
