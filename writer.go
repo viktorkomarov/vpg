@@ -8,9 +8,8 @@ import (
 )
 
 type Writer struct {
-	buffer         *bytes.Buffer
-	setMessageType bool
-	writer         io.Writer
+	buffer *bytes.Buffer
+	writer io.Writer
 }
 
 func newWriter(writer io.Writer) *Writer {
@@ -27,23 +26,18 @@ type encoder interface {
 func (w *Writer) mType(c byte) *Writer {
 	w.buffer.Reset()
 	w.buffer.WriteByte(c)
-	w.setMessageType = true
 
 	return w
 }
 
 func (w *Writer) sendMsg(msg encoder) error {
 	data := msg.encode()
-	size := len(data)
-	if w.setMessageType {
-		size++
-		w.setMessageType = false
-	}
-
-	binary.Write(w.buffer, binary.BigEndian, int32(size)+4)
+	size := len(data) + 4
+	binary.Write(w.buffer, binary.BigEndian, int32(size))
 	w.buffer.Write(data)
-	w.buffer.WriteByte('\000')
 	log.Printf("%+v", w.buffer.Bytes())
-	_, err := w.buffer.WriteTo(w.writer)
+
+	sender := w.buffer.Bytes()
+	_, err := w.writer.Write(sender)
 	return err
 }

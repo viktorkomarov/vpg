@@ -4,11 +4,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"log"
 )
 
 func md5Hash(password, user, salt string) string {
-	log.Printf("%s\n", password)
 	m := md5.New()
 	m.Write([]byte(password + user))
 	user = hex.EncodeToString(m.Sum(nil))
@@ -23,7 +21,7 @@ type authPassword struct {
 }
 
 func (a authPassword) encode() []byte {
-	return []byte(a.password)
+	return append([]byte(a.password), '\000')
 }
 
 type passwordClient struct {

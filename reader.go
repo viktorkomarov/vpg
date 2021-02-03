@@ -74,6 +74,6 @@ func receiveAuth(payload []byte) (message, error) {
 	//case authenticationSASLFinal:
 	//return NewSASLFinal(payload[4:])
 	default:
-		return nil, fmt.Errorf("unknown autherozied msg  %d %s", authType, payload[5:])
+		return nil, fmt.Errorf("unknown autherization msg  %d %s", authType, payload[5:])
 	}
 }
