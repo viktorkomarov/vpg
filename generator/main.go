@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sort"
 	"strconv"
@@ -16,7 +18,14 @@ type test struct {
 }
 
 func main() {
+	t := &test{
+		A: 5,
+		B: "hello",
+	}
 
+	vValue := reflect.ValueOf(t)
+
+	log.Printf("%v\n", vValue.Kind())
 }
 
 type BytesFields struct {
@@ -27,6 +36,39 @@ type BytesFields struct {
 }
 
 func Decode(data []byte, v interface{}) error {
+	ptr := reflect.ValueOf(v)
+	if ptr.Kind() != reflect.Ptr || ptr.IsNil() {
+		return errors.New("not nil ptr is required")
+	}
+
+	fields, err := analyzeFields(v)
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(fields, func(i, j int) bool {
+		return fields[i].order < fields[j].order
+	})
+
+	header, size := headerSize(data)
+	data = data[5:]
+
+	if header != fields[0].header {
+		// handler postgres err and other async msg
+		return errors.New("mismatch header type")
+	}
+
+	for i := 1; i < len(fields); i++ {
+		decoder, err := decodeByType(fields[i].val)
+		if err != nil {
+			return err
+		}
+
+		if err = decoder(data, fields[i].val); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -73,15 +115,13 @@ func Encode(v interface{}) ([]byte, error) {
 
 func analyzeFields(v interface{}) ([]BytesFields, error) {
 	vValue := reflect.Indirect(reflect.ValueOf(v))
-	vType := reflect.TypeOf(v)
-
 	if vValue.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("args isn't struct %+v", v)
 	}
 
 	bytesMap := make([]BytesFields, 0)
-	for i := 0; i < vType.NumField(); i++ {
-		field := vType.Field(i)
+	for i := 0; i < vValue.NumField(); i++ {
+		field := vValue.Type().Field(i)
 		header, ok := field.Tag.Lookup("header")
 		if ok {
 			bytesMap = append(bytesMap, BytesFields{
@@ -199,4 +239,15 @@ func encodeSlice(out *bytes.Buffer, v reflect.Value) error {
 	}
 
 	return nil
+}
+
+func headerSize(data []byte) (byte, int) {
+	header := data[0]
+	size := binary.BigEndian.Uint32(data[1:5])
+
+	return header, int(size)
+}
+
+func decodeByType(v reflect.Value) (func([]byte, reflect.Value) error, error) {
+	return nil, nil
 }
