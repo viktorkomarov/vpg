@@ -3,9 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"strconv"
@@ -13,27 +11,18 @@ import (
 
 type test struct {
 	H byte   `header:"p"`
-	A int    `pg_type:"1"`
+	A int    `pg_type:"1" pg_name:"user"`
 	B string `pg_type:"2"`
 }
 
 func main() {
-	t := test{
-		A: 5,
-		B: "hello",
-	}
 
-	data, err := Encode(t)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("%+v", data)
 }
 
 type BytesFields struct {
 	header byte
 	order  int
+	name   string
 	val    reflect.Value
 }
 
@@ -64,7 +53,14 @@ func Encode(v interface{}) ([]byte, error) {
 			return nil, err
 		}
 
-		if err = encoder(&out); err != nil {
+		if bytesMap[i].name != "" {
+			err = encodeString(&out, reflect.ValueOf(bytesMap[i].name))
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if err = encoder(&out, bytesMap[i].val); err != nil {
 			return nil, err
 		}
 	}
@@ -96,11 +92,12 @@ func analyzeFields(v interface{}) ([]BytesFields, error) {
 			continue
 		}
 
-		pg, ok := field.Tag.Lookup("pg")
+		pg, ok := field.Tag.Lookup("pg_type")
 		if !ok {
 			continue
 		}
 
+		name, _ := field.Tag.Lookup("pg_name")
 		order, err := strconv.Atoi(pg)
 		if err != nil {
 			return nil, fmt.Errorf("incorrect order %s", pg)
@@ -108,6 +105,7 @@ func analyzeFields(v interface{}) ([]BytesFields, error) {
 
 		bytesMap = append(bytesMap, BytesFields{
 			order: order,
+			name:  name,
 			val:   vValue.Field(i),
 		})
 	}
@@ -151,27 +149,54 @@ func buildHeaders(field BytesFields, out *bytes.Buffer) int {
 	return begin
 }
 
-func encoderByType(v reflect.Value) (func(out *bytes.Buffer) error, error) {
+func encoderByType(v reflect.Value) (func(*bytes.Buffer, reflect.Value) error, error) {
 	switch v.Kind() {
 	case reflect.Uint8: // byte is alias for uint8
-		return func(out *bytes.Buffer) error {
-			return out.WriteByte(v.Interface().(byte))
-		}, nil
-	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
-		return func(out *bytes.Buffer) error {
-			return binary.Write(out, binary.BigEndian, v.Interface())
-		}, nil
+		return encodeByte, nil
+	case reflect.Int16:
+		return encodeInt16, nil
+	case reflect.Int, reflect.Int32, reflect.Int64:
+		return encodeInt, nil
 	case reflect.String:
-		return func(out *bytes.Buffer) error {
-			bytes := append([]byte(v.Interface().(string)), '\000')
-			_, err := out.Write(bytes)
-			return err
-		}, nil
-	case reflect.Array:
-		return func(out *bytes.Buffer) error {
-			return errors.New("impement me!")
-		}, nil
+		return encodeString, nil
+	case reflect.Slice:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unsupported pg type %v", v)
 	}
+}
+
+func encodeByte(out *bytes.Buffer, v reflect.Value) error {
+	return out.WriteByte(v.Interface().(byte))
+}
+
+func encodeInt16(out *bytes.Buffer, v reflect.Value) error {
+	out.Grow(2)
+	return binary.Write(out, binary.BigEndian, v.Interface().(int16))
+}
+
+func encodeInt(out *bytes.Buffer, v reflect.Value) error {
+	out.Grow(4)
+	return binary.Write(out, binary.BigEndian, int32(v.Int()))
+}
+
+func encodeString(out *bytes.Buffer, v reflect.Value) error {
+	_, err := out.Write(append([]byte(v.Interface().(string)), '\000'))
+	return err
+}
+
+func encodeSlice(out *bytes.Buffer, v reflect.Value) error {
+	for i := 0; i < v.Len(); i++ {
+		encoder, err := encoderByType(v.Index(i))
+		if err != nil {
+			return err
+		}
+
+		err = encoder(out, v)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
