@@ -1,6 +1,9 @@
 package main
 
-import "log"
+import (
+	"log"
+	"reflect"
+)
 
 type Test struct {
 	R       byte   `pg_header:"R"`
@@ -9,18 +12,8 @@ type Test struct {
 }
 
 func main() {
-	t := Test{Payload: "payload", Numeric: 4}
+	var v byte
 
-	data, err := Encode(t)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("%+v", data)
-	var d Test
-	err = Decode(data, &d)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v\n", d)
+	val := reflect.ValueOf(v)
+	log.Printf("%s", val.Kind())
 }

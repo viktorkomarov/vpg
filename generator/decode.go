@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 )
@@ -40,13 +39,8 @@ func Decode(data []byte, v interface{}) error {
 			return err
 		}
 
-		offset := lenOfVal(data, field.val)
-		if offset > len(data) {
-			return errors.New("real problem")
-		}
-
-		log.Printf("%+v\n", data[:offset])
-		if err = decode(data[:offset], field.val); err != nil {
+		offset, err := decode(data, field)
+		if err != nil {
 			return err
 		}
 
@@ -56,38 +50,62 @@ func Decode(data []byte, v interface{}) error {
 	return nil
 }
 
-func decodeByType(v reflect.Type) (func([]byte, reflect.Value) error, error) {
+func decodeByType(v reflect.Type) (func([]byte, Field) (int, error), error) {
 	switch v.Kind() {
 	case reflect.String:
 		return decodeString, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return decodeInt, nil
+	case reflect.Slice:
+		return decodeSlice, nil
 	default:
 		return nil, fmt.Errorf("unsupported decode type %+v", v.Kind())
 	}
 }
 
-func decodeString(b []byte, v reflect.Value) error {
-	if v.CanSet() {
-		v.SetString(string(b))
-		return nil
+func decodeString(data []byte, v Field) (int, error) {
+	offset := elementaryOffset(data, v.typ)
+
+	str := data[:offset]
+	if v.val.CanSet() {
+		v.val.SetString(string(str))
+		return offset, nil
 	}
 
-	return fmt.Errorf("unsettable field %+v", v)
+	return 0, fmt.Errorf("unsettable field %+v", v)
 }
 
-func decodeInt(b []byte, v reflect.Value) error {
-	if v.CanSet() {
-		data := int64(binary.BigEndian.Uint32(b))
-		v.SetInt(data)
-		return nil
+func decodeInt(data []byte, v Field) (int, error) {
+	offset := elementaryOffset(data, v.typ)
+
+	if v.val.CanSet() {
+		var num int64
+		switch num {
+		case 2:
+			num = int64(binary.BigEndian.Uint16(data))
+		case 4:
+			num = int64(binary.BigEndian.Uint32(data))
+		}
+
+		v.val.SetInt(num)
+		return offset, nil
 	}
 
-	return fmt.Errorf("unsettable field %+v", v)
+	return 0, fmt.Errorf("unsettable field %+v", v)
 }
 
-func lenOfVal(data []byte, v reflect.Value) int {
-	switch v.Kind() {
+func decodeSlice(data []byte, field Field) (int, error) {
+	if field.size == -1 {
+		field.size = int(binary.BigEndian.Uint32(data))
+	}
+
+	for ; field.size > 0; field.size-- {
+
+	}
+}
+
+func elementaryOffset(data []byte, typ reflect.Type) int {
+	switch typ.Kind() {
 	case reflect.String:
 		return bytes.IndexByte(data, '\000') + 1
 	case reflect.Int16:
@@ -96,9 +114,7 @@ func lenOfVal(data []byte, v reflect.Value) int {
 		return 4
 	case reflect.Uint8:
 		return 1
-	case reflect.Slice: // -1 if size prev
+	default:
 		return 0
 	}
-
-	return 0
 }
