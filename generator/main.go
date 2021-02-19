@@ -5,10 +5,11 @@ import "log"
 type Test struct {
 	R       byte   `pg_header:"R"`
 	Payload string `pg_order:"1"`
+	Numeric int    `pg_order:"2"`
 }
 
 func main() {
-	t := Test{Payload: "payload"}
+	t := Test{Payload: "payload", Numeric: 4}
 
 	data, err := Encode(t)
 	if err != nil {
@@ -21,5 +22,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("%v\n", d.Payload)
+	log.Printf("%+v\n", d)
 }

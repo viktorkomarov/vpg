@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sort"
 )
@@ -43,9 +45,12 @@ func Decode(data []byte, v interface{}) error {
 			return errors.New("real problem")
 		}
 
+		log.Printf("%+v\n", data[:offset])
 		if err = decode(data[:offset], field.val); err != nil {
 			return err
 		}
+
+		data = data[offset:]
 	}
 
 	return nil
@@ -55,6 +60,8 @@ func decodeByType(v reflect.Type) (func([]byte, reflect.Value) error, error) {
 	switch v.Kind() {
 	case reflect.String:
 		return decodeString, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return decodeInt, nil
 	default:
 		return nil, fmt.Errorf("unsupported decode type %+v", v.Kind())
 	}
@@ -69,13 +76,23 @@ func decodeString(b []byte, v reflect.Value) error {
 	return fmt.Errorf("unsettable field %+v", v)
 }
 
+func decodeInt(b []byte, v reflect.Value) error {
+	if v.CanSet() {
+		data := int64(binary.BigEndian.Uint32(b))
+		v.SetInt(data)
+		return nil
+	}
+
+	return fmt.Errorf("unsettable field %+v", v)
+}
+
 func lenOfVal(data []byte, v reflect.Value) int {
 	switch v.Kind() {
 	case reflect.String:
-		return bytes.IndexByte(data, '\000')
+		return bytes.IndexByte(data, '\000') + 1
 	case reflect.Int16:
 		return 2
-	case reflect.Int32:
+	case reflect.Int32, reflect.Int64, reflect.Int:
 		return 4
 	case reflect.Uint8:
 		return 1
