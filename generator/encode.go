@@ -24,7 +24,7 @@ func Encode(v interface{}) ([]byte, error) {
 
 	var out bytes.Buffer
 	start := buildHeaders(fields[0], &out)
-	if start == 5 {
+	if start == 1 {
 		fields = fields[1:]
 	}
 
@@ -47,7 +47,7 @@ func Encode(v interface{}) ([]byte, error) {
 	}
 
 	data := out.Bytes()
-	binary.BigEndian.PutUint32(data[start:start+4], uint32(len(data)-1))
+	binary.BigEndian.PutUint32(data[start:start+4], uint32(len(data)))
 
 	return data, nil
 }
@@ -74,7 +74,7 @@ func encoderByType(v reflect.Value) (func(*bytes.Buffer, reflect.Value) error, e
 	case reflect.String:
 		return encodeString, nil
 	case reflect.Slice:
-		return nil, nil
+		return encodeSlice, nil
 	default:
 		return nil, fmt.Errorf("unsupported pg type %v", v)
 	}
@@ -101,12 +101,13 @@ func encodeString(out *bytes.Buffer, v reflect.Value) error {
 
 func encodeSlice(out *bytes.Buffer, v reflect.Value) error {
 	for i := 0; i < v.Len(); i++ {
-		encoder, err := encoderByType(v.Index(i))
+		elem := v.Index(i)
+		encoder, err := encoderByType(elem)
 		if err != nil {
 			return err
 		}
 
-		err = encoder(out, v)
+		err = encoder(out, elem)
 		if err != nil {
 			return err
 		}

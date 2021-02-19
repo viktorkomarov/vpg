@@ -25,12 +25,15 @@ func (w WithoutHeader) Bytes() []byte {
 	out.Write(append([]byte("name"), '\000'))
 	out.Write(append([]byte(w.Payload), '\000'))
 	out.Grow(4)
-	binary.Write(&out, binary.BigEndian, w.Numeric)
-	for i := range w.Slices {
+	binary.Write(&out, binary.BigEndian, int32(w.Numeric))
+	out.Write(append([]byte("slice"), '\000'))
+	for _, n := range w.Slices {
 		out.Grow(4)
-		binary.Write(&out, binary.BigEndian, w.Slices[i])
+		binary.Write(&out, binary.BigEndian, int32(n))
 	}
 
+	data := out.Bytes()
+	binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
 	return out.Bytes()
 }
 
@@ -49,9 +52,10 @@ func TestEncode(t *testing.T) {
 		tC := tC
 		t.Run(tC.desc, func(t *testing.T) {
 			data, err := Encode(tC.v)
-			require.EqualError(t, tC.expectedErr, err, tC.desc)
-			if tC.expectedErr != nil {
+			if tC.expectedErr == nil {
 				require.Equal(t, tC.v.Bytes(), data)
+			} else {
+				require.Error(t, tC.expectedErr, err.Error(), tC.desc)
 			}
 		})
 	}

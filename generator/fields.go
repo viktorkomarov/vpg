@@ -10,13 +10,9 @@ type Field struct {
 	header  byte
 	order   int
 	preffix string
+	size    int
 	val     reflect.Value
 	typ     reflect.Type
-}
-
-type pgArray struct {
-	size  int
-	items []int
 }
 
 func analyzeFields(v interface{}) ([]Field, error) {
@@ -50,11 +46,21 @@ func analyzeFields(v interface{}) ([]Field, error) {
 			return nil, fmt.Errorf("incorrect order %s", pg)
 		}
 
+		realSize := 0
+		size, ok := field.Tag.Lookup("pg_size")
+		if ok {
+			realSize, err = strconv.Atoi(size)
+			if err != nil {
+				return nil, fmt.Errorf("incorrect order")
+			}
+		}
+
 		fields = append(fields, Field{
 			order:   order,
 			preffix: preffix,
 			val:     strct.Field(i),
 			typ:     field.Type,
+			size:    realSize,
 		})
 	}
 
