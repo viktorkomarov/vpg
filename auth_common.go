@@ -1,4 +1,4 @@
-package main
+package vpg
 
 type authenticationResponseType uint32
 

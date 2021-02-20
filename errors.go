@@ -1,4 +1,4 @@
-package main
+package vpg
 
 // https://postgrespro.ru/docs/postgrespro/10/protocol-error-fields
 

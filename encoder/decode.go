@@ -1,4 +1,4 @@
-package main
+package encoder
 
 import (
 	"bytes"
@@ -9,15 +9,15 @@ import (
 	"sort"
 )
 
-func Decode(data []byte, v interface{}) error {
+func Decode(data []byte, v interface{}) (interface{}, error) { // not interface{}, asyncmsg
 	ptr := reflect.ValueOf(v)
 	if ptr.Kind() != reflect.Ptr || ptr.IsNil() {
-		return errors.New("not nil ptr is required")
+		return nil, errors.New("not nil ptr is required")
 	}
 
 	fields, err := analyzeFields(v)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sort.Slice(fields, func(i, j int) bool {
@@ -29,25 +29,25 @@ func Decode(data []byte, v interface{}) error {
 
 	if header != fields[0].header {
 		// handler postgres err and other async msg
-		return errors.New("mismatch header type")
+		return struct{}{}, nil
 	}
 
 	fields = fields[1:]
 	for _, field := range fields {
 		decode, err := decodeByType(field.typ)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		offset, err := decode(data, field)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		data = data[offset:]
 	}
 
-	return nil
+	return nil, nil
 }
 
 func decodeByType(v reflect.Type) (func([]byte, Field) (int, error), error) {

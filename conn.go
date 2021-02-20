@@ -1,4 +1,4 @@
-package main
+package vpg
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ type Conn struct {
 	cfg map[string]string
 
 	conn   net.Conn
-	writer *Writer
-	reader *Reader
+	reader Reader
+	writer Writer
 
 	parametersStatus map[string]string
 	pid              int32
@@ -32,11 +32,11 @@ func New(cfg map[string]string) (*Conn, error) {
 	c := &Conn{
 		conn:             conn,
 		cfg:              cfg,
-		reader:           newReader(conn),
 		writer:           newWriter(conn),
 		parametersStatus: make(map[string]string),
 	}
 
+	c.reader = newReader(c.conn, c)
 	if err = c.init(); err != nil {
 		c.conn.Close()
 		return nil, err
@@ -46,7 +46,11 @@ func New(cfg map[string]string) (*Conn, error) {
 }
 
 func (c *Conn) init() error {
-	if err := c.writer.sendMsg(newStartUpMessage(c.cfg)); err != nil {
+	if err := c.writer.sendMsg(startUpMsg{
+		Version:  protocolVersion,
+		User:     c.cfg["user"],
+		Database: c.cfg["database"],
+	}); err != nil {
 		return err
 	}
 

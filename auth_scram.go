@@ -1,4 +1,4 @@
-package main
+package vpg
 
 const saslAuthenticationProtocol = "SCRAM-SHA-256"
 

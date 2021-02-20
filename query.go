@@ -1,4 +1,4 @@
-package main
+package vpg
 
 import (
 	"encoding/binary"

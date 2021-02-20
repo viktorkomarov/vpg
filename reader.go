@@ -1,4 +1,4 @@
-package main
+package vpg
 
 import (
 	"bufio"
@@ -6,27 +6,48 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/viktorkomarov/vpg/encoder"
 )
 
 type Reader struct {
 	reader *bufio.Reader
+	conn   *Conn // for async msg update info
 }
 
-func newReader(src io.Reader) *Reader {
-	return &Reader{
+func newReader(src io.Reader, conn *Conn) Reader {
+	return Reader{
 		reader: bufio.NewReader(src),
+		conn:   conn,
 	}
-}
-
-type message interface {
-	isMessage()
 }
 
 var (
 	ErrBreakingProtocol = errors.New("unknown postgres protocol action")
 )
 
-func (r *Reader) receive() (message, error) {
+func (r Reader) recieveMsg(v interface{}) error {
+	for {
+		full, err := r.readBytes()
+		if err != nil {
+			return err
+		}
+
+		asyncMsg, err := encoder.Decode(full, v)
+		if err != nil {
+			return err
+		}
+
+		if asyncMsg != nil {
+			// r.conn.updateInfo(asyncMsg)
+			continue
+		}
+
+		return nil
+	}
+}
+
+func (r Reader) readBytes() ([]byte, error) {
 	typeMessage, err := r.reader.ReadByte() // maybe use ioutil
 	if err != nil {
 		return nil, fmt.Errorf("can't read msg type %w", err)
@@ -43,37 +64,5 @@ func (r *Reader) receive() (message, error) {
 		return nil, fmt.Errorf("can't read msg payload %w", err)
 	}
 
-	switch rune(typeMessage) {
-	case 'E':
-		return nil, NewErrPostgresResponse(payload)
-	case 'R':
-		return receiveAuth(payload)
-	case 'T':
-		return NewRowDescription(payload)
-	case 'S':
-		return newParametrStatus(payload), nil
-	case 'K':
-		return NewBackendKeyData(payload)
-	case 'Z':
-		return newReadyForQuery(payload)
-	default:
-		return nil, fmt.Errorf("unknown msg type %s %w", string(typeMessage), ErrBreakingProtocol)
-	}
-}
-
-func receiveAuth(payload []byte) (message, error) {
-	authType := authenticationResponseType(binary.BigEndian.Uint32(payload[:4]))
-
-	switch authType {
-	case authenticationOK, authenticationCleartextPassword:
-		return auth{Type: authType}, nil
-	case authenticationMD5Password, authenticationSASL:
-		return auth{Type: authType, Payload: payload[4:]}, nil
-	//case authenticationSASLContinue:
-	//return NewSASSLContinue(payload[4:])
-	//case authenticationSASLFinal:
-	//return NewSASLFinal(payload[4:])
-	default:
-		return nil, fmt.Errorf("unknown autherization msg  %d %s", authType, payload[5:])
-	}
+	return append(append([]byte{typeMessage}, sizeBuf...), payload...), nil
 }

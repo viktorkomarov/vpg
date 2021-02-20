@@ -1,43 +1,27 @@
-package main
+package vpg
 
 import (
-	"bytes"
-	"encoding/binary"
-	"io"
-	"log"
+	"net"
+
+	"github.com/viktorkomarov/vpg/encoder"
 )
 
 type Writer struct {
-	buffer *bytes.Buffer
-	writer io.Writer
+	conn net.Conn
 }
 
-func newWriter(writer io.Writer) *Writer {
-	return &Writer{
-		buffer: bytes.NewBuffer(make([]byte, 0, 1024)),
-		writer: writer,
+func newWriter(conn net.Conn) Writer {
+	return Writer{
+		conn: conn,
 	}
 }
 
-type encoder interface {
-	encode() []byte
-}
+func (w Writer) sendMsg(v interface{}) error {
+	data, err := encoder.Encode(v)
+	if err != nil {
+		return err
+	}
 
-func (w *Writer) mType(c byte) *Writer {
-	w.buffer.Reset()
-	w.buffer.WriteByte(c)
-
-	return w
-}
-
-func (w *Writer) sendMsg(msg encoder) error {
-	data := msg.encode()
-	size := len(data) + 4
-	binary.Write(w.buffer, binary.BigEndian, int32(size))
-	w.buffer.Write(data)
-	log.Printf("%+v", w.buffer.Bytes())
-
-	sender := w.buffer.Bytes()
-	_, err := w.writer.Write(sender)
+	_, err = w.conn.Write(data)
 	return err
 }
