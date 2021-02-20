@@ -79,14 +79,7 @@ func decodeInt(data []byte, v Field) (int, error) {
 	offset := elementaryOffset(data, v.typ)
 
 	if v.val.CanSet() {
-		var num int64
-		switch num {
-		case 2:
-			num = int64(binary.BigEndian.Uint16(data))
-		case 4:
-			num = int64(binary.BigEndian.Uint32(data))
-		}
-
+		num := int64(binary.BigEndian.Uint32(data)) // change it can be uint16
 		v.val.SetInt(num)
 		return offset, nil
 	}
@@ -95,13 +88,35 @@ func decodeInt(data []byte, v Field) (int, error) {
 }
 
 func decodeSlice(data []byte, field Field) (int, error) {
+	offset := 0
 	if field.size == -1 {
 		field.size = int(binary.BigEndian.Uint32(data))
+		offset += 4
 	}
 
-	for ; field.size > 0; field.size-- {
+	sl := reflect.MakeSlice(field.typ, field.size, field.size)
+	for i := 0; i < field.size; i++ {
+		val := sl.Index(i)
 
+		decode, err := decodeByType(field.typ.Elem())
+		if err != nil {
+			return 0, err
+		}
+
+		elemOffset, err := decode(data[offset:], Field{val: val, typ: field.typ.Elem()})
+		if err != nil {
+			return 0, err
+		}
+
+		offset += elemOffset
 	}
+
+	if !field.val.CanSet() {
+		return 0, fmt.Errorf("unsettable field %+v", field)
+	}
+
+	field.val.Set(sl)
+	return offset, nil
 }
 
 func elementaryOffset(data []byte, typ reflect.Type) int {
