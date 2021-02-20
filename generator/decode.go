@@ -79,7 +79,16 @@ func decodeInt(data []byte, v Field) (int, error) {
 	offset := elementaryOffset(data, v.typ)
 
 	if v.val.CanSet() {
-		num := int64(binary.BigEndian.Uint32(data)) // change it can be uint16
+		var num int64
+		switch offset {
+		case 1:
+			num = int64(data[1])
+		case 2:
+			num = int64(binary.BigEndian.Uint16(data))
+		default:
+			num = int64(binary.BigEndian.Uint32(data))
+		}
+
 		v.val.SetInt(num)
 		return offset, nil
 	}
@@ -125,9 +134,9 @@ func elementaryOffset(data []byte, typ reflect.Type) int {
 		return bytes.IndexByte(data, '\000') + 1
 	case reflect.Int16:
 		return 2
-	case reflect.Int32, reflect.Int64, reflect.Int:
+	case reflect.Int32, reflect.Int64, reflect.Int: // pg doesn't have int64
 		return 4
-	case reflect.Uint8:
+	case reflect.Uint8: // alias for byte
 		return 1
 	default:
 		return 0
